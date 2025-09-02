@@ -43,14 +43,23 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
     });
     const [autoStop, setAutoStop] = useState(false);
     const [durationMinutes, setDurationMinutes] = useState(60);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
+    const videoFileInputRef = useRef<HTMLInputElement>(null);
     
+    const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [aiError, setAiError] = useState('');
 
     useEffect(() => {
+        // Bersihkan URL objek pratinjau video sebelumnya untuk mencegah kebocoran memori
+        if (videoPreviewUrl) {
+            URL.revokeObjectURL(videoPreviewUrl);
+            setVideoPreviewUrl(null);
+        }
+
         if (stream) {
             setTitle(stream.title);
             setDescription(stream.description);
@@ -65,9 +74,15 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
             setAutoStop(stream.schedule.autoStop || false);
             setDurationMinutes(stream.schedule.durationMinutes || 60);
         } else {
-            // Set default for new stream
+            // Atur default untuk streaming baru
             const nextHour = new Date();
             nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+            setTitle('');
+            setDescription('');
+            setThumbnail(undefined);
+            setThumbnailPreview(null);
+            setVideoSource({ type: VideoSourceType.Upload, path: '' });
+            setDestinations([]);
             setSchedule({
                 recurrence: Recurrence.None,
                 datetime: nextHour.toISOString().substring(0, 16),
@@ -78,6 +93,15 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
             setDurationMinutes(60);
         }
     }, [stream]);
+
+    // Efek pembersihan untuk URL objek saat komponen di-unmount
+    useEffect(() => {
+        return () => {
+            if (videoPreviewUrl) {
+                URL.revokeObjectURL(videoPreviewUrl);
+            }
+        };
+    }, [videoPreviewUrl]);
     
     const handleAddDestination = () => {
         setDestinations([...destinations, { id: `dest-${Date.now()}`, platform: Platform.YouTube, streamKey: '' }]);
@@ -97,11 +121,30 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
             const reader = new FileReader();
             reader.onloadend = () => {
                 setThumbnailPreview(reader.result as string);
-                setThumbnail(reader.result as string); // For mock purposes, we store the data URL
+                setThumbnail(reader.result as string); // Untuk tujuan mock, kami menyimpan URL data
             };
             reader.readAsDataURL(file);
         }
     };
+    
+    const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (!file.type.startsWith('video/')) {
+                alert('Harap pilih file video yang valid.');
+                return;
+            }
+            setVideoSource({ type: VideoSourceType.Upload, path: file.name });
+
+            // Buat URL pratinjau dan bersihkan yang lama jika ada
+            if (videoPreviewUrl) {
+                URL.revokeObjectURL(videoPreviewUrl);
+            }
+            const newPreviewUrl = URL.createObjectURL(file);
+            setVideoPreviewUrl(newPreviewUrl);
+        }
+    };
+
 
     const handleDayOfWeekChange = (day: DayOfWeek) => {
         setSchedule(prev => {
@@ -189,7 +232,7 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
                              <label className="block text-sm font-medium text-text-secondary">Thumbnail</label>
                              <div 
                                 className="w-full h-40 bg-secondary rounded-md flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-600 hover:border-accent transition"
-                                onClick={() => fileInputRef.current?.click()}
+                                onClick={() => thumbnailFileInputRef.current?.click()}
                              >
                                  {thumbnailPreview ? (
                                     <img src={thumbnailPreview} alt="Pratinjau thumbnail" className="w-full h-full object-cover rounded-md" />
@@ -200,7 +243,7 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
                                     </div>
                                  )}
                              </div>
-                             <input type="file" accept="image/*" ref={fileInputRef} onChange={handleThumbnailChange} className="hidden" />
+                             <input type="file" accept="image/*" ref={thumbnailFileInputRef} onChange={handleThumbnailChange} className="hidden" />
                         </div>
                     </div>
                 </Card>
@@ -215,8 +258,35 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
                             </select>
                         </div>
                         <div className="flex-1">
-                            {videoSource.type === VideoSourceType.Upload ? (
-                                <Input label="Unggah Video" type="file" onChange={(e) => setVideoSource({ ...videoSource, path: e.target.files?.[0]?.name || '' })} />
+                             {videoSource.type === VideoSourceType.Upload ? (
+                                <div>
+                                    <label className="block text-sm font-medium text-text-secondary mb-2">File Video</label>
+                                    <input
+                                        type="file"
+                                        accept="video/*"
+                                        ref={videoFileInputRef}
+                                        onChange={handleVideoFileChange}
+                                        className="hidden"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        onClick={() => videoFileInputRef.current?.click()}
+                                    >
+                                        Pilih File Video
+                                    </Button>
+                                    {stream && videoSource.path && !videoPreviewUrl && (
+                                        <p className="text-sm text-text-secondary mt-2">
+                                            File saat ini: {videoSource.path} (Pilih file baru untuk mengganti)
+                                        </p>
+                                    )}
+                                    {videoPreviewUrl && (
+                                        <div className="mt-4">
+                                            <p className="text-sm text-text-secondary mb-2">Pratinjau: {videoSource.path}</p>
+                                            <video src={videoPreviewUrl} controls className="w-full max-w-md rounded-lg bg-black"></video>
+                                        </div>
+                                    )}
+                                </div>
                             ) : (
                                 <Input label="URL Google Drive" type="url" value={videoSource.path} onChange={(e) => setVideoSource({ ...videoSource, path: e.target.value })} placeholder="https://drive.google.com/..." />
                             )}

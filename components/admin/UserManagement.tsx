@@ -3,7 +3,7 @@ import { User } from '../../types';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { SearchIcon } from '../icons/Icons';
+import { SearchIcon, UserCircleIcon } from '../icons/Icons';
 
 interface UserManagementProps {
     users: User[];
@@ -15,6 +15,12 @@ type StatusFilter = 'All' | 'Active' | 'Inactive';
 const UserManagement: React.FC<UserManagementProps> = ({ users, onSetUserLicenseStatus }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
+
+    const filterButtons: { label: string, value: StatusFilter }[] = [
+        { label: 'Semua', value: 'All' },
+        { label: 'Aktif', value: 'Active' },
+        { label: 'Nonaktif', value: 'Inactive' },
+    ];
 
     const filteredUsers = useMemo(() => {
         return users.filter(user => {
@@ -30,12 +36,21 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onSetUserLicense
             return matchesStatus && matchesSearch;
         });
     }, [users, searchQuery, statusFilter]);
+
+    const getEmptyStateMessage = () => {
+        const filterLabel = filterButtons.find(f => f.value === statusFilter)?.label.toLowerCase();
     
-    const filterButtons: { label: string, value: StatusFilter }[] = [
-        { label: 'Semua', value: 'All' },
-        { label: 'Aktif', value: 'Active' },
-        { label: 'Nonaktif', value: 'Inactive' },
-    ];
+        if (searchQuery && statusFilter !== 'All') {
+            return `Tidak ada pengguna ${filterLabel} yang cocok dengan pencarian "${searchQuery}".`;
+        }
+        if (searchQuery) {
+            return `Tidak ada pengguna yang cocok dengan pencarian "${searchQuery}".`;
+        }
+        if (statusFilter !== 'All') {
+            return `Tidak ada pengguna dengan status ${filterLabel}.`;
+        }
+        return 'Tidak ada pengguna yang terdaftar dalam sistem.';
+    };
 
     return (
         <Card>
@@ -69,7 +84,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onSetUserLicense
                 <table className="min-w-full divide-y divide-secondary">
                     <thead className="bg-background">
                         <tr>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">Nama</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">Pengguna</th>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">Email</th>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">Status Lisensi</th>
                             <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-text-secondary uppercase tracking-wider">Aksi</th>
@@ -79,7 +94,20 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onSetUserLicense
                         {filteredUsers.length > 0 ? (
                             filteredUsers.map((user) => (
                                 <tr key={user.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-text-primary">{user.name}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center">
+                                            <div className="flex-shrink-0 h-10 w-10">
+                                                {user.photo ? (
+                                                    <img className="h-10 w-10 rounded-full object-cover" src={user.photo} alt={`${user.name}'s profile`} />
+                                                ) : (
+                                                    <UserCircleIcon className="h-10 w-10 text-gray-500" />
+                                                )}
+                                            </div>
+                                            <div className="ml-4">
+                                                <div className="text-sm font-medium text-text-primary">{user.name}</div>
+                                            </div>
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">{user.email}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         {user.licenseActive ? (
@@ -110,7 +138,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onSetUserLicense
                         ) : (
                             <tr>
                                 <td colSpan={4} className="text-center py-8 text-text-secondary">
-                                    Tidak ada pengguna yang cocok dengan kriteria filter Anda.
+                                    {getEmptyStateMessage()}
                                 </td>
                             </tr>
                         )}

@@ -4,12 +4,16 @@ import Toggle from '../ui/Toggle';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { YouTubeIcon, FacebookIcon, TwitchIcon, TikTokIcon, InstagramIcon, CheckCircleIcon, TrashIcon, PlusIcon } from '../icons/Icons';
+import { validateApiKey } from '../../services/geminiService';
+import Spinner from '../ui/Spinner';
 
 const SettingsPage: React.FC = () => {
     const [previewMode, setPreviewMode] = useState(true);
     const [apiKeys, setApiKeys] = useState<string[]>([]);
     const [newApiKey, setNewApiKey] = useState('');
     const [addSuccess, setAddSuccess] = useState(false);
+    const [isValidating, setIsValidating] = useState(false);
+    const [validationError, setValidationError] = useState('');
 
     useEffect(() => {
         const storedKeys = localStorage.getItem('geminiApiKeys');
@@ -26,17 +30,31 @@ const SettingsPage: React.FC = () => {
         }
     }, []);
     
-    const handleAddApiKey = () => {
-        if (newApiKey && !apiKeys.includes(newApiKey)) {
-            const updatedKeys = [...apiKeys, newApiKey];
-            setApiKeys(updatedKeys);
-            localStorage.setItem('geminiApiKeys', JSON.stringify(updatedKeys));
-            setNewApiKey('');
-            setAddSuccess(true);
-            setTimeout(() => {
-                setAddSuccess(false);
-            }, 3000);
+    const handleAddApiKey = async () => {
+        if (!newApiKey) return;
+
+        setIsValidating(true);
+        setValidationError('');
+        setAddSuccess(false);
+
+        const isValid = await validateApiKey(newApiKey);
+
+        if (isValid) {
+            if (!apiKeys.includes(newApiKey)) {
+                const updatedKeys = [...apiKeys, newApiKey];
+                setApiKeys(updatedKeys);
+                localStorage.setItem('geminiApiKeys', JSON.stringify(updatedKeys));
+                setNewApiKey('');
+                setAddSuccess(true);
+                setTimeout(() => setAddSuccess(false), 3000);
+            } else {
+                 setValidationError('Kunci API ini sudah ditambahkan.');
+            }
+        } else {
+            setValidationError('Kunci API tidak valid. Harap periksa kembali atau coba kunci lain.');
         }
+
+        setIsValidating(false);
     };
 
     const handleDeleteApiKey = (keyToDelete: string) => {
@@ -74,24 +92,27 @@ const SettingsPage: React.FC = () => {
                         Tambahkan satu atau lebih kunci API Google Gemini. Sistem akan secara otomatis mencoba kunci berikutnya jika salah satu gagal.
                     </p>
                     <div className="space-y-4">
-                        <div className="flex gap-2 items-end">
-                            <Input 
-                                label="Kunci API Gemini Baru"
-                                type="password"
-                                value={newApiKey}
-                                onChange={(e) => setNewApiKey(e.target.value)}
-                                placeholder="Masukkan kunci API Anda"
-                                className="flex-grow"
-                            />
-                            <Button onClick={handleAddApiKey} disabled={!newApiKey}>
-                                <PlusIcon className="h-5 w-5 mr-2" />
-                                Tambah
+                        <div className="flex gap-2 items-start">
+                             <div className="flex-grow">
+                                <Input 
+                                    label="Kunci API Gemini Baru"
+                                    type="password"
+                                    value={newApiKey}
+                                    onChange={(e) => setNewApiKey(e.target.value)}
+                                    placeholder="Masukkan kunci API Anda"
+                                    className="flex-grow"
+                                    disabled={isValidating}
+                                />
+                                {validationError && <p className="text-red-400 text-sm mt-1">{validationError}</p>}
+                            </div>
+                            <Button onClick={handleAddApiKey} disabled={!newApiKey || isValidating} className="mt-7">
+                                {isValidating ? <Spinner /> : <><PlusIcon className="h-5 w-5 mr-2" /> Tambah</>}
                             </Button>
                         </div>
                         {addSuccess && (
                             <div className="flex items-center text-green-400 text-sm">
                                 <CheckCircleIcon className="h-5 w-5 mr-2" />
-                                <span>Kunci berhasil ditambahkan!</span>
+                                <span>Kunci berhasil divalidasi dan ditambahkan!</span>
                             </div>
                         )}
                         <div className="space-y-2 pt-2">
@@ -111,6 +132,19 @@ const SettingsPage: React.FC = () => {
                                 <p className="text-sm text-gray-500">Belum ada kunci API yang ditambahkan.</p>
                             )}
                         </div>
+                    </div>
+                     <div className="mt-6 pt-4 border-t border-secondary text-sm text-text-secondary">
+                        <p>
+                            Tidak punya kunci API? Dapatkan kunci Anda dari{' '}
+                            <a 
+                                href="https://aistudio.google.com/app/apikey" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-accent hover:underline font-semibold"
+                            >
+                                Google AI Studio
+                            </a>.
+                        </p>
                     </div>
                 </Card>
 

@@ -83,6 +83,17 @@ export interface Stream {
     status: StreamStatus;
 }
 
+export type NotificationType = 'info' | 'success' | 'error' | 'warning';
+
+export interface Notification {
+  id: string;
+  message: string;
+  timestamp: string; // ISO string
+  read: boolean;
+  type: NotificationType;
+  streamId?: string;
+}
+
 
 // --- MOCK DATA ---
 
@@ -95,6 +106,9 @@ export const initialUsers: User[] = [
 const tomorrow = new Date();
 tomorrow.setDate(tomorrow.getDate() + 1);
 tomorrow.setHours(14, 0, 0);
+
+const soon = new Date();
+soon.setMinutes(soon.getMinutes() + 4);
 
 export const initialStreams: Stream[] = [
     {
@@ -128,6 +142,21 @@ export const initialStreams: Stream[] = [
         schedule: { 
             recurrence: Recurrence.None, 
             datetime: tomorrow.toISOString(),
+        },
+        status: StreamStatus.Scheduled
+    },
+    {
+        id: 'stream-3',
+        title: 'Tutorial FFMPEG (Segera Tayang)',
+        description: 'Tutorial mendalam tentang penggunaan FFMPEG untuk manipulasi video.',
+        thumbnail: 'https://placehold.co/600x400/6366f1/f9fafb?text=FFMPEG',
+        videoSource: { type: VideoSourceType.Upload, path: 'ffmpeg_tutorial.mp4' },
+        destinations: [
+            { id: 'dest-3a', platform: Platform.YouTube, streamKey: 'zzzz-zzzz-zzzz-zzzz' }
+        ],
+        schedule: { 
+            recurrence: Recurrence.None, 
+            datetime: soon.toISOString(),
         },
         status: StreamStatus.Scheduled
     }

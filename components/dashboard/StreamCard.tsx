@@ -1,17 +1,17 @@
-
 import React from 'react';
 import { Stream, StreamStatus, Recurrence, Schedule, DayOfWeek } from '../../types';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
-import { ClockIcon, EditIcon, TrashIcon, PlayIcon, YouTubeIcon, FacebookIcon, TwitchIcon, CustomStreamIcon, TikTokIcon, InstagramIcon, StopIcon } from '../icons/Icons';
+import { ClockIcon, EditIcon, TrashIcon, PlayIcon, YouTubeIcon, FacebookIcon, TwitchIcon, CustomStreamIcon, TikTokIcon, InstagramIcon, StopIcon, WarningIcon } from '../icons/Icons';
 
 interface StreamCardProps {
     stream: Stream;
     onEdit: () => void;
     onDelete: () => void;
+    onStatusChange: (streamId: string, newStatus: StreamStatus) => void;
 }
 
-const StreamCard: React.FC<StreamCardProps> = ({ stream, onEdit, onDelete }) => {
+const StreamCard: React.FC<StreamCardProps> = ({ stream, onEdit, onDelete, onStatusChange }) => {
 
     const statusText: Record<StreamStatus, string> = {
         [StreamStatus.Scheduled]: 'Dijadwalkan',
@@ -100,7 +100,19 @@ const StreamCard: React.FC<StreamCardProps> = ({ stream, onEdit, onDelete }) => 
             <div className="flex justify-end space-x-2 mt-4 p-4 border-t border-secondary">
                 <Button variant="secondary" onClick={onEdit} title="Ubah"><EditIcon className="h-5 w-5" /></Button>
                 <Button variant="danger" onClick={onDelete} title="Hapus"><TrashIcon className="h-5 w-5" /></Button>
-                {stream.status !== StreamStatus.Live && <Button variant="primary" onClick={() => alert('Memulai streaming... (simulasi)')} title="Mulai Siaran"><PlayIcon className="h-5 w-5"/></Button>}
+                
+                {stream.status === StreamStatus.Scheduled && (
+                    <>
+                        <Button variant="secondary" onClick={() => onStatusChange(stream.id, StreamStatus.Error)} title="Simulasi Gagal"><WarningIcon className="h-5 w-5 text-yellow-400" /></Button>
+                        <Button variant="primary" onClick={() => onStatusChange(stream.id, StreamStatus.Live)} title="Mulai Siaran"><PlayIcon className="h-5 w-5"/></Button>
+                    </>
+                )}
+
+                {stream.status === StreamStatus.Live && (
+                     <Button variant="danger" onClick={() => onStatusChange(stream.id, StreamStatus.Ended)} title="Hentikan Siaran">
+                        <StopIcon className="h-5 w-5" />
+                    </Button>
+                )}
             </div>
         </Card>
     );

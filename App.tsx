@@ -1,6 +1,6 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
-import { User, Page, Stream, initialStreams, initialUsers } from './types';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { User, Page, Stream, initialStreams, initialUsers, Notification, NotificationType, StreamStatus, Recurrence } from './types';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 import PageContainer from './components/layout/PageContainer';
@@ -24,6 +24,11 @@ const App: React.FC = () => {
     const [editingStreamId, setEditingStreamId] = useState<string | null>(null);
     const [authPage, setAuthPage] = useState<'login' | 'register'>('login');
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
+    
+    // Notification State
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [upcomingNotifiedIds, setUpcomingNotifiedIds] = useState<Set<string>>(new Set());
+
 
     const updateStreamsHistory = (newStreams: Stream[]) => {
         const newHistory = history.slice(0, historyIndex + 1);
@@ -104,8 +109,6 @@ const App: React.FC = () => {
         }
     }, [canRedo]);
 
-
-    // Dihapus useCallback untuk memastikan fungsi tidak pernah stale
     const setUserLicenseStatus = (userId: string, isActive: boolean) => {
         setUsers(prevUsers => prevUsers.map(u => u.id === userId ? { ...u, licenseActive: isActive } : u));
     };
@@ -113,6 +116,75 @@ const App: React.FC = () => {
     const editingStream = useMemo(() => {
         return streams.find(s => s.id === editingStreamId) || null;
     }, [editingStreamId, streams]);
+
+    // --- NOTIFICATION LOGIC ---
+    const addNotification = useCallback((type: NotificationType, message: string, streamId?: string) => {
+        const newNotification: Notification = {
+            id: `notif-${Date.now()}-${Math.random()}`,
+            type,
+            message,
+            streamId,
+            read: false,
+            timestamp: new Date().toISOString(),
+        };
+        setNotifications(prev => [newNotification, ...prev]);
+    }, []);
+
+    const markNotificationAsRead = useCallback((notificationId: string) => {
+        setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read: true } : n));
+    }, []);
+
+    const markAllAsRead = useCallback(() => {
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    }, []);
+
+    const handleStreamStatusChange = useCallback((streamId: string, status: StreamStatus) => {
+        const currentStreams = history[historyIndex];
+        const streamToUpdate = currentStreams.find(s => s.id === streamId);
+        if (!streamToUpdate || streamToUpdate.status === status) return;
+
+        const newStreams = currentStreams.map(s => s.id === streamId ? { ...s, status } : s);
+        updateStreamsHistory(newStreams);
+
+        switch (status) {
+            case StreamStatus.Live:
+                addNotification('success', `"${streamToUpdate.title}" sekarang sedang tayang!`, streamId);
+                // Simulate stream ending after 1 minute for demo
+                setTimeout(() => {
+                    handleStreamStatusChange(streamId, StreamStatus.Ended);
+                }, 60000); 
+                break;
+            case StreamStatus.Ended:
+                addNotification('info', `"${streamToUpdate.title}" telah berakhir.`, streamId);
+                break;
+            case StreamStatus.Error:
+                addNotification('error', `Gagal memulai streaming "${streamToUpdate.title}".`, streamId);
+                break;
+        }
+    }, [history, historyIndex, addNotification]);
+
+    // Effect for checking upcoming streams
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const now = new Date();
+            const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+
+            streams.forEach(stream => {
+                if (stream.status === StreamStatus.Scheduled && stream.schedule.recurrence === Recurrence.None && stream.schedule.datetime) {
+                    const streamTime = new Date(stream.schedule.datetime);
+                    if (streamTime > now && streamTime <= fiveMinutesFromNow) {
+                        if (!upcomingNotifiedIds.has(stream.id)) {
+                            addNotification('warning', `"${stream.title}" akan dimulai dalam 5 menit.`, stream.id);
+                            setUpcomingNotifiedIds(prev => new Set(prev).add(stream.id));
+                        }
+                    }
+                }
+            });
+        }, 30000); // Check every 30 seconds
+
+        return () => clearInterval(interval);
+    }, [streams, upcomingNotifiedIds, addNotification]);
+
 
     if (!user) {
         if (authPage === 'login') {
@@ -141,6 +213,7 @@ const App: React.FC = () => {
                     onRedo={handleRedo}
                     canUndo={canUndo}
                     canRedo={canRedo}
+                    onStatusChange={handleStreamStatusChange}
                 />;
             case 'edit-stream':
                 return <StreamEditor stream={editingStream} onSave={saveStream} onCancel={() => handleNavigation('dashboard')} />;
@@ -158,6 +231,7 @@ const App: React.FC = () => {
                     onRedo={handleRedo}
                     canUndo={canUndo}
                     canRedo={canRedo}
+                    onStatusChange={handleStreamStatusChange}
                 />;
         }
     };
@@ -166,7 +240,13 @@ const App: React.FC = () => {
         <div className="flex h-screen bg-background text-text-primary">
             <Sidebar onNavigate={handleNavigation} userRole={user.role} />
             <div className="flex-1 flex flex-col overflow-hidden">
-                <Header user={user} onLogout={handleLogout} />
+                <Header 
+                    user={user} 
+                    onLogout={handleLogout} 
+                    notifications={notifications}
+                    onMarkNotificationAsRead={markNotificationAsRead}
+                    onMarkAllNotificationsAsRead={markAllAsRead}
+                />
                 <PageContainer>
                     {renderPage()}
                 </PageContainer>

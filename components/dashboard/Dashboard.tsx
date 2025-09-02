@@ -16,6 +16,7 @@ interface DashboardProps {
     onRedo: () => void;
     canUndo: boolean;
     canRedo: boolean;
+    onStatusChange: (streamId: string, status: StreamStatus) => void;
 }
 
 const statusFilters: Array<StreamStatus | 'All'> = ['All', StreamStatus.Scheduled, StreamStatus.Live, StreamStatus.Ended, StreamStatus.Error];
@@ -27,7 +28,7 @@ const statusFilterText: Record<StreamStatus | 'All', string> = {
     [StreamStatus.Error]: 'Gagal',
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ streams, onEdit, onDelete, onCreate, onUndo, onRedo, canUndo, canRedo }) => {
+const Dashboard: React.FC<DashboardProps> = ({ streams, onEdit, onDelete, onCreate, onUndo, onRedo, canUndo, canRedo, onStatusChange }) => {
     const [isTutorialModalOpen, setIsTutorialModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<StreamStatus | 'All'>('All');
@@ -97,6 +98,7 @@ const Dashboard: React.FC<DashboardProps> = ({ streams, onEdit, onDelete, onCrea
                             stream={stream}
                             onEdit={() => onEdit(stream.id)}
                             onDelete={() => onDelete(stream.id)}
+                            onStatusChange={onStatusChange}
                         />
                     ))}
                 </div>
