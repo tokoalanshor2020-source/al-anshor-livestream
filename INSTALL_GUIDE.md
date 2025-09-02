@@ -1,6 +1,6 @@
-# Panduan Deployment AL ANSHOR LIVE STREAM di VPS
+# Panduan Deployment AL ANSHOR LIVE STREAM di VPS (Metode PM2)
 
-Panduan ini dirancang untuk mendeploy antarmuka (frontend) aplikasi ini di server Anda menggunakan metode modern yang andal dan ringan, sesuai untuk lingkungan VPS.
+Panduan ini dirancang untuk mendeploy antarmuka (frontend) aplikasi ini di server Anda menggunakan metode yang stabil, ringan, dan andal, sangat cocok untuk lingkungan VPS.
 
 ---
 
@@ -12,61 +12,71 @@ Repositori ini hanya berisi **Frontend** (panel kontrol web). Ini adalah antarmu
 -   **Backend (Tanggung Jawab Anda):** Ini adalah "mesin" yang berjalan di VPS Anda, yang harus Anda bangun secara terpisah. Backend akan menerima perintah dari Frontend (misalnya, melalui API) dan melakukan pekerjaan berat:
     -   Menjalankan `ffmpeg` untuk memproses dan menyiarkan video.
     -   Menggunakan `tmux` untuk menjaga proses streaming tetap berjalan di latar belakang.
-    -   Semua ini idealnya juga dikelola dalam kontainer **Docker** terpisah untuk backend.
+    -   Idealnya, semua ini juga dikelola dalam kontainer **Docker** terpisah untuk backend.
 
 Panduan ini akan fokus pada cara menjalankan **Frontend** dengan benar dan efisien di VPS Anda.
 
 ---
 
-## 2. Metode Deployment: Docker (Sangat Direkomendasikan)
+## 2. Metode Deployment: `pm2` + `serve` (Stabil & Ringan)
 
-Ini adalah cara terbaik dan termudah. Docker mengisolasi aplikasi Anda, memastikannya berjalan secara konsisten, aman, dan tidak mengganggu layanan lain di server.
+Metode ini menggunakan alat standar industri untuk menjalankan aplikasi berbasis JavaScript/Node.js secara permanen.
+
+-   **`serve`**: Server statis yang sangat ringan untuk menyajikan file aplikasi Anda.
+-   **`pm2`**: Manajer proses yang akan menjaga aplikasi Anda tetap berjalan 24/7 dan secara otomatis me-restart jika terjadi crash.
 
 ### Prasyarat
 
-Anda perlu menginstal Docker dan Docker Compose di VPS Anda. Jika belum terinstal, jalankan perintah berikut:
+-   **Node.js dan NPM**: Anda memerlukan Node.js (versi 16 atau lebih baru) dan npm. Jika belum terinstal:
+    ```bash
+    curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    ```
+
+### Langkah 1: Siapkan File Aplikasi
+
+1.  Salin semua file aplikasi ke direktori di VPS Anda, misalnya `/home/user/alanshor-livestream`. Cara termudah adalah menggunakan `git`:
+    ```bash
+    # Ganti URL dengan URL repositori Anda jika perlu
+    git clone https://github.com/username/repo.git /home/user/alanshor-livestream
+    cd /home/user/alanshor-livestream
+    ```
+
+### Langkah 2: Instal Alat yang Diperlukan
+
+Instal `serve` dan `pm2` secara global menggunakan `npm`.
+```bash
+npm install -g serve pm2
+```
+
+### Langkah 3: Jalankan Aplikasi dengan PM2
+
+Sekarang, dari dalam direktori aplikasi Anda (`/home/user/alanshor-livestream`), jalankan perintah berikut untuk memulai aplikasi Anda dan menjaganya tetap berjalan:
 
 ```bash
-# Perbarui daftar paket Anda
-sudo apt update
-
-# Instal paket yang diperlukan untuk mengizinkan apt menggunakan repositori melalui HTTPS
-sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-
-# Tambahkan GPG key resmi Docker
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-# Tambahkan repositori Docker ke sumber APT
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Instal Docker Engine dan Docker Compose
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+pm2 start "npx serve -s . -l 3000" --name "alanshor-livestream-frontend"
 ```
-Verifikasi instalasi dengan menjalankan: `sudo docker --version` dan `docker compose version`.
 
-### Langkah-langkah Deployment
+Penjelasan Perintah:
+-   `pm2 start "..."`: Memulai proses yang didefinisikan dalam tanda kutip.
+-   `npx serve`: Menjalankan server `serve`.
+-   `-s`: Mode *single-page application*. Ini sangat penting; ini memastikan bahwa semua permintaan akan diarahkan ke `index.html`, yang memungkinkan routing di sisi klien React berfungsi dengan benar.
+-   `.`: Menyajikan file dari direktori saat ini.
+-   `-l 3000`: Menjalankan server di port 3000.
+-   `--name "..."`: Memberi nama proses di `pm2` agar mudah diidentifikasi.
 
-1.  **Salin Semua File Aplikasi**:
-    Pastikan semua file dari repositori ini (termasuk `Dockerfile`, `docker-compose.yml`, dan `nginx.conf` yang baru) berada dalam satu folder di VPS Anda, misalnya di `/home/user/alanshor-livestream`.
+Untuk memastikan aplikasi Anda akan otomatis berjalan lagi setelah VPS di-reboot, jalankan:
+```bash
+pm2 startup
+# Salin dan jalankan perintah yang diberikan oleh pm2
+pm2 save
+```
 
-2.  **Jalankan Aplikasi dengan Docker Compose**:
-    Masuk ke direktori aplikasi Anda, lalu jalankan satu perintah ini. Perintah ini akan membangun gambar Docker, membuat kontainer, dan menjalankannya di latar belakang.
-    ```bash
-    cd /home/user/alanshor-livestream
-    docker compose up -d
-    ```
-    - `-d` berarti *detached*, jadi proses berjalan permanen di latar belakang.
+### Langkah 4: Konfigurasi Nginx sebagai Reverse Proxy (Akses Publik)
 
-Aplikasi Anda sekarang berjalan di dalam kontainer Docker pada port **3000**. Anda bisa memeriksanya dengan perintah `docker ps`.
+Langkah ini penting agar Anda dapat mengakses aplikasi melalui IP publik VPS Anda (atau domain) tanpa perlu mengetik `:3000`.
 
----
-
-## 3. Konfigurasi Nginx sebagai Reverse Proxy (Akses Publik)
-
-Langkah ini sangat penting agar Anda dapat mengakses aplikasi melalui alamat IP publik VPS Anda (atau nama domain) tanpa perlu mengetik `:3000` di akhir URL.
-
-1.  **Instal Nginx** (jika belum terinstal):
+1.  **Instal Nginx**:
     ```bash
     sudo apt update && sudo apt install nginx -y
     ```
@@ -76,48 +86,40 @@ Langkah ini sangat penting agar Anda dapat mengakses aplikasi melalui alamat IP 
     sudo nano /etc/nginx/sites-available/alanshor-livestream
     ```
 
-3.  **Tempel konfigurasi berikut ke dalam file**:
-    Ganti `ALAMAT_IP_VPS_ANDA` dengan IP publik VPS Anda atau domain yang Anda miliki.
+3.  **Tempel konfigurasi berikut**:
+    Ganti `ALAMAT_IP_VPS_ANDA` dengan IP publik VPS Anda.
 
     ```nginx
     server {
-        # Nginx akan mendengarkan di port 80 (HTTP standar)
         listen 80;
         server_name ALAMAT_IP_VPS_ANDA; # Ganti dengan IP atau domain Anda
 
-        # Semua permintaan akan diteruskan ke aplikasi frontend
         location / {
-            # Arahkan lalu lintas ke aplikasi yang berjalan di port 3000
-            # (port yang diekspos oleh kontainer Docker kita)
+            # Teruskan lalu lintas ke aplikasi yang berjalan di port 3000
             proxy_pass http://127.0.0.1:3000;
-            
-            # Header penting untuk memastikan komunikasi yang benar
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection 'upgrade';
             proxy_set_header Host $host;
-            proxy_cache_bypass $http_upgrade;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
         }
     }
     ```
 
 4.  **Aktifkan Konfigurasi**:
     ```bash
-    # Buat tautan simbolis dari sites-available ke sites-enabled
     sudo ln -s /etc/nginx/sites-available/alanshor-livestream /etc/nginx/sites-enabled/
-    
-    # Hapus konfigurasi default Nginx agar tidak bentrok (jika ada)
-    sudo rm /etc/nginx/sites-enabled/default
-    
-    # Uji konfigurasi Nginx untuk memastikan tidak ada kesalahan
-    sudo nginx -t
-    
-    # Jika pengujian berhasil, muat ulang Nginx untuk menerapkan perubahan
-    sudo systemctl restart nginx
+    sudo rm /etc/nginx/sites-enabled/default # Hapus konfigurasi default jika ada
+    sudo nginx -t # Uji konfigurasi
+    sudo systemctl restart nginx # Muat ulang Nginx
     ```
 
 ## Selesai!
 
-Sekarang Anda dapat membuka browser web dan menavigasi ke `http://ALAMAT_IP_VPS_ANDA`. Anda akan melihat antarmuka AL ANSHOR LIVE STREAM, yang disajikan dengan aman dan efisien oleh Nginx dari dalam kontainer Docker yang ringan.
+Sekarang buka browser dan navigasikan ke `http://ALAMAT_IP_VPS_ANDA`. Anda akan melihat antarmuka AL ANSHOR LIVE STREAM, yang disajikan oleh Nginx dari aplikasi yang berjalan stabil di bawah `pm2`.
+
+### Perintah PM2 yang Berguna
+
+-   **Melihat status semua aplikasi**: `pm2 list`
+-   **Melihat log aplikasi**: `pm2 logs alanshor-livestream-frontend`
+-   **Me-restart aplikasi**: `pm2 restart alanshor-livestream-frontend`
+-   **Menghentikan aplikasi**: `pm2 stop alanshor-livestream-frontend`
