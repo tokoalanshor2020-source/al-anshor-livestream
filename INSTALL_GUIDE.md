@@ -38,7 +38,7 @@ Metode ini menggunakan alat standar industri untuk menjalankan aplikasi berbasis
 1.  Salin semua file aplikasi ke direktori di VPS Anda, misalnya `/home/user/alanshor-livestream`. Cara termudah adalah menggunakan `git`:
     ```bash
     # Ganti URL dengan URL repositori Anda jika perlu
-    git clone https://github.com/username/repo.git /home/user/alanshor-livestream
+    git clone https://github.com/tokoalanshor2020-source/al-anshor-livestream.git /home/user/alanshor-livestream
     cd /home/user/alanshor-livestream
     ```
 
