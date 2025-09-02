@@ -1,8 +1,9 @@
+
 import React, { useState, useMemo } from 'react';
 import { Stream, StreamStatus } from '../../types';
 import StreamCard from './StreamCard';
 import Button from '../ui/Button';
-import { PlusIcon, HelpIcon, SparklesIcon, PlayIcon, SearchIcon } from '../icons/Icons';
+import { PlusIcon, HelpIcon, SparklesIcon, PlayIcon, SearchIcon, UndoIcon, RedoIcon } from '../icons/Icons';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 
@@ -11,6 +12,10 @@ interface DashboardProps {
     onEdit: (streamId: string) => void;
     onDelete: (streamId: string) => void;
     onCreate: () => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
 }
 
 const statusFilters: Array<StreamStatus | 'All'> = ['All', StreamStatus.Scheduled, StreamStatus.Live, StreamStatus.Ended, StreamStatus.Error];
@@ -22,7 +27,7 @@ const statusFilterText: Record<StreamStatus | 'All', string> = {
     [StreamStatus.Error]: 'Gagal',
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ streams, onEdit, onDelete, onCreate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ streams, onEdit, onDelete, onCreate, onUndo, onRedo, canUndo, canRedo }) => {
     const [isTutorialModalOpen, setIsTutorialModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<StreamStatus | 'All'>('All');
@@ -40,9 +45,17 @@ const Dashboard: React.FC<DashboardProps> = ({ streams, onEdit, onDelete, onCrea
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Streaming Saya</h1>
                 <div className="flex items-center space-x-2">
+                    <Button onClick={onUndo} disabled={!canUndo} variant="secondary">
+                        <UndoIcon className="h-5 w-5 mr-2" />
+                        Batal
+                    </Button>
+                    <Button onClick={onRedo} disabled={!canRedo} variant="secondary">
+                        <RedoIcon className="h-5 w-5 mr-2" />
+                        Ulangi
+                    </Button>
                     <Button onClick={() => setIsTutorialModalOpen(true)} variant="secondary">
                         <HelpIcon className="h-5 w-5 mr-2" />
-                        Tutorial Pengoperasian
+                        Tutorial
                     </Button>
                     <Button onClick={onCreate}>
                         <PlusIcon className="h-5 w-5 mr-2" />

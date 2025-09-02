@@ -1,120 +1,193 @@
-# Panduan Instalasi AL ANSHOR LIVE STREAM di VPS
+# Panduan Instalasi AL ANSHOR LIVE STREAM di VPS (Diperbaiki)
 
-Panduan ini akan memandu Anda melalui proses instalasi dan deployment aplikasi AL ANSHOR LIVE STREAM di server VPS (Virtual Private Server), seperti Contabo, dan membuatnya dapat diakses melalui IP publik.
+Panduan ini telah diperbarui dengan proses build yang benar untuk aplikasi React/TypeScript. Mengikuti langkah-langkah ini akan mengatasi masalah layar kosong.
 
-## Prasyarat
+## Konsep Kunci: Proses Build
 
-1.  **Server VPS**: Server yang menjalankan sistem operasi Linux (disarankan Ubuntu 22.04 atau lebih baru).
-2.  **Akses Root**: Anda harus memiliki akses `root` atau pengguna dengan hak `sudo`.
-3.  **IP Publik**: VPS Anda harus memiliki alamat IP publik yang statis.
-4.  **Kunci API Google Gemini**: Anda memerlukan kunci API yang valid dari Google AI Studio untuk fitur AI, yang akan dimasukkan melalui UI aplikasi.
+Aplikasi ini ditulis dalam TypeScript (TSX), yang tidak dapat dijalankan langsung oleh browser. Kita harus menggunakan "build tool" (seperti Vite) untuk mengkompilasi dan membundel kode sumber menjadi file HTML, JavaScript, dan CSS statis yang siap untuk produksi. Panduan ini menambahkan langkah build yang hilang tersebut.
 
 ---
 
-## Langkah 1: Persiapan Server Awal
+## Langkah 1: Prasyarat
 
-Masuk ke VPS Anda melalui SSH:
-```bash
-ssh root@ALAMAT_IP_VPS_ANDA
-```
+1.  **Server VPS**: Server yang menjalankan Ubuntu 22.04 atau lebih baru.
+2.  **Akses Root/Sudo**: Hak akses administratif di server Anda.
+3.  **Node.js dan npm**: Diperlukan untuk build process dan menjalankan server.
+    - Jika belum terinstal, jalankan:
+      ```bash
+      curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+      sudo apt-get install -y nodejs
+      ```
 
-Perbarui daftar paket dan tingkatkan paket yang ada:
-```bash
-sudo apt update && sudo apt upgrade -y
-```
+---
 
-## Langkah 2: Instalasi Node.js dan Manajer Proses
+## Langkah 2: Dapatkan Kode Aplikasi dan Konfigurasi Proyek
 
-Aplikasi ini berjalan di lingkungan Node.js. Kami akan menginstal Node.js dan PM2 (manajer proses untuk menjaga aplikasi tetap berjalan).
-
-1.  **Instal Node.js (versi 18.x direkomendasikan)**:
+1.  **Instal Git dan Clone Repositori**:
     ```bash
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-    ```
-
-2.  **Verifikasi Instalasi Node.js dan npm**:
-    ```bash
-    node -v
-    npm -v
-    ```
-    Anda akan melihat versi yang terinstal.
-
-3.  **Instal PM2 secara global**:
-    ```bash
-    sudo npm install pm2 -g
-    ```
-
-## Langkah 3: Dapatkan Kode Aplikasi
-
-1.  **Instal Git** (jika belum terinstal):
-    ```bash
-    sudo apt install git -y
-    ```
-
-2.  **Clone Repositori Aplikasi** (gantilah URL dengan URL repo Anda yang sebenarnya):
-    ```bash
-    # Ganti dengan URL repositori Git Anda yang sebenarnya
+    sudo apt update && sudo apt install git -y
+    # Ganti dengan URL repositori Git Anda
     git clone https://github.com/tokoalanshor2020-source/al-anshor-livestream.git
-    ```
-
-3.  **Masuk ke direktori aplikasi**:
-    ```bash
     cd al-anshor-livestream
     ```
 
-## Langkah 4: Menjalankan Aplikasi dengan PM2
-
-Karena ini adalah aplikasi frontend statis (HTML, JS, CSS), kita perlu server web sederhana untuk menyajikannya. Kita akan menggunakan paket `serve`.
-
-1.  **Instal `serve` secara global**:
+2.  **Buat file `package.json`**:
+    Ini adalah file paling penting yang mendefinisikan proyek, dependensi, dan skrip. Buat file bernama `package.json` di root proyek:
     ```bash
-    sudo npm install -g serve
+    nano package.json
+    ```
+    Tempel konten berikut ke dalam file:
+    ```json
+    {
+      "name": "al-anshor-livestream",
+      "private": true,
+      "version": "0.0.0",
+      "type": "module",
+      "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+      },
+      "dependencies": {
+        "@google/genai": "^1.16.0",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
+      },
+      "devDependencies": {
+        "@types/react": "^18.2.37",
+        "@types/react-dom": "^18.2.15",
+        "@vitejs/plugin-react": "^4.2.0",
+        "typescript": "^5.2.2",
+        "vite": "^5.0.0"
+      }
+    }
     ```
 
-2.  **Jalankan aplikasi menggunakan `pm2` dan `serve`**:
-    Dari dalam direktori aplikasi Anda, jalankan perintah berikut:
+3.  **Buat file `vite.config.ts`**:
+    Ini adalah file konfigurasi untuk build tool Vite. Buat file bernama `vite.config.ts`:
     ```bash
-    pm2 start serve -s . -l 3000 --name "al-anshor-frontend"
+    nano vite.config.ts
     ```
-    Penjelasan:
-    - `pm2 start serve`: Memulai `serve` dengan PM2.
-    - `-s .`: Memberitahu `serve` untuk menyajikan konten dari direktori saat ini (`.`).
-    - `-l 3000`: Menjalankan server di port 3000.
-    - `--name "al-anshor-frontend"`: Memberi nama proses di PM2.
+    Tempel konten berikut:
+    ```typescript
+    import { defineConfig } from 'vite'
+    import react from '@vitejs/plugin-react'
 
-3.  **Simpan konfigurasi PM2** agar aplikasi otomatis berjalan setelah server reboot:
+    // https://vitejs.dev/config/
+    export default defineConfig({
+      plugins: [react()],
+      server: {
+        host: '0.0.0.0'
+      }
+    })
+    ```
+    
+4.  **Buat file `tsconfig.json`**:
+    File ini mengkonfigurasi bagaimana TypeScript mengkompilasi kode Anda. Buat file `tsconfig.json`:
+    ```bash
+    nano tsconfig.json
+    ```
+    Tempel konten berikut:
+    ```json
+    {
+      "compilerOptions": {
+        "target": "ES2020",
+        "useDefineForClassFields": true,
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "module": "ESNext",
+        "skipLibCheck": true,
+
+        /* Bundler mode */
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "jsx": "react-jsx",
+
+        /* Linting */
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true
+      },
+      "include": ["."],
+      "references": [{ "path": "./tsconfig.node.json" }]
+    }
+    ```
+
+5.  **Buat file `tsconfig.node.json`**:
+    ```bash
+    nano tsconfig.node.json
+    ```
+    Tempel konten berikut:
+    ```json
+    {
+      "compilerOptions": {
+        "composite": true,
+        "skipLibCheck": true,
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "allowSyntheticDefaultImports": true
+      },
+      "include": ["vite.config.ts"]
+    }
+    ```
+
+---
+
+## Langkah 3: Instal Dependensi dan Build Aplikasi
+
+Sekarang setelah proyek dikonfigurasi dengan benar, kita dapat menginstal paket yang diperlukan dan membuat file produksi.
+
+1.  **Instal semua dependensi** dari `package.json`:
+    ```bash
+    npm install
+    ```
+
+2.  **Jalankan proses build**:
+    ```bash
+    npm run build
+    ```
+    Perintah ini akan membuat direktori baru bernama `dist` yang berisi semua file HTML, JS, dan CSS yang telah dioptimalkan dan siap untuk disajikan.
+
+---
+
+## Langkah 4: Jalankan Aplikasi dengan PM2
+
+Kita akan menyajikan konten dari folder `dist`, bukan dari root proyek.
+
+1.  **Instal `serve` dan `pm2`** (jika belum):
+    ```bash
+    sudo npm install -g serve pm2
+    ```
+
+2.  **Jalankan aplikasi dari folder `dist`**:
+    ```bash
+    pm2 start serve -s dist -l 3000 --name "al-anshor-frontend"
+    ```
+    - `-s dist`: Memberitahu `serve` untuk menyajikan konten dari folder `dist`.
+
+3.  **Simpan konfigurasi PM2** untuk restart otomatis:
     ```bash
     pm2 save
     pm2 startup
     ```
-    Ikuti instruksi yang ditampilkan di terminal untuk menyelesaikan setup startup.
-
-Sekarang, aplikasi Anda seharusnya berjalan di `http://ALAMAT_IP_VPS_ANDA:3000`. Kunci API Gemini dapat dikonfigurasi melalui menu Pengaturan di dalam aplikasi.
+    Ikuti instruksi di terminal. Aplikasi Anda sekarang berjalan di `http://ALAMAT_IP_VPS_ANDA:3000`.
 
 ---
 
-## Langkah 5 (Opsional tapi Direkomendasikan): Konfigurasi Nginx sebagai Reverse Proxy
+## Langkah 5 (Opsional): Konfigurasi Nginx sebagai Reverse Proxy
 
-Agar aplikasi dapat diakses langsung melalui IP publik Anda (tanpa mengetik `:3000`), kita akan menggunakan Nginx sebagai reverse proxy.
+Langkah ini tetap sama dan akan membuat aplikasi Anda dapat diakses di port 80 (HTTP default).
 
-1.  **Instal Nginx**:
-    ```bash
-    sudo apt install nginx -y
-    ```
-
-2.  **Buat file konfigurasi Nginx baru**:
-    ```bash
-    sudo nano /etc/nginx/sites-available/alanshor
-    ```
-
-3.  **Tempel konfigurasi berikut** ke dalam file. Ganti `ALAMAT_IP_VPS_ANDA` dengan IP publik Anda.
+1.  **Instal Nginx**: `sudo apt install nginx -y`
+2.  **Buat file konfigurasi**: `sudo nano /etc/nginx/sites-available/alanshor`
+3.  **Tempel konfigurasi berikut** (tidak ada perubahan dari sebelumnya):
     ```nginx
     server {
         listen 80;
-        listen [::]:80;
-
-        server_name ALAMAT_IP_VPS_ANDA;
+        server_name ALAMAT_IP_VPS_ANDA; # Ganti dengan IP Anda
 
         location / {
             proxy_pass http://localhost:3000;
@@ -126,26 +199,12 @@ Agar aplikasi dapat diakses langsung melalui IP publik Anda (tanpa mengetik `:30
         }
     }
     ```
-
-4.  **Aktifkan konfigurasi** dengan membuat symbolic link:
+4.  **Aktifkan situs dan restart Nginx**:
     ```bash
     sudo ln -s /etc/nginx/sites-available/alanshor /etc/nginx/sites-enabled/
-    ```
-
-5.  **Hapus link default Nginx** (jika ada):
-    ```bash
     sudo rm /etc/nginx/sites-enabled/default
-    ```
-
-6.  **Uji konfigurasi Nginx**:
-    ```bash
     sudo nginx -t
-    ```
-    Jika outputnya `syntax is ok` dan `test is successful`, lanjutkan.
-
-7.  **Restart Nginx**:
-    ```bash
     sudo systemctl restart nginx
     ```
 
-Sekarang, aplikasi Anda dapat diakses langsung melalui `http://ALAMAT_IP_VPS_ANDA`.
+Aplikasi Anda sekarang harus dapat diakses dan berjalan dengan benar di `http://ALAMAT_IP_VPS_ANDA`.

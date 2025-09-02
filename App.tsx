@@ -14,11 +14,22 @@ import UserManagement from './components/admin/UserManagement';
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-    const [streams, setStreams] = useState<Stream[]>(initialStreams);
+    
+    // History state for streams to enable undo/redo
+    const [history, setHistory] = useState<Stream[][]>([initialStreams]);
+    const [historyIndex, setHistoryIndex] = useState(0);
+    const streams = history[historyIndex];
+
     const [users, setUsers] = useState<User[]>(initialUsers);
     const [editingStreamId, setEditingStreamId] = useState<string | null>(null);
     const [authPage, setAuthPage] = useState<'login' | 'register'>('login');
     const [registrationSuccess, setRegistrationSuccess] = useState(false);
+
+    const updateStreamsHistory = (newStreams: Stream[]) => {
+        const newHistory = history.slice(0, historyIndex + 1);
+        setHistory([...newHistory, newStreams]);
+        setHistoryIndex(newHistory.length);
+    };
     
     const handleLogin = useCallback((loggedInUser: User) => {
         setUser(loggedInUser);
@@ -59,20 +70,40 @@ const App: React.FC = () => {
     }, []);
 
     const saveStream = useCallback((stream: Stream) => {
-        setStreams(prevStreams => {
-            const exists = prevStreams.some(s => s.id === stream.id);
-            if (exists) {
-                return prevStreams.map(s => s.id === stream.id ? stream : s);
-            }
-            return [...prevStreams, stream];
-        });
+        const currentStreams = history[historyIndex];
+        const exists = currentStreams.some(s => s.id === stream.id);
+        let newStreams;
+        if (exists) {
+            newStreams = currentStreams.map(s => s.id === stream.id ? stream : s);
+        } else {
+            newStreams = [...currentStreams, stream];
+        }
+        updateStreamsHistory(newStreams);
         setCurrentPage('dashboard');
         setEditingStreamId(null);
-    }, []);
+    }, [history, historyIndex]);
 
     const deleteStream = useCallback((streamId: string) => {
-        setStreams(prevStreams => prevStreams.filter(s => s.id !== streamId));
-    }, []);
+        const currentStreams = history[historyIndex];
+        const newStreams = currentStreams.filter(s => s.id !== streamId);
+        updateStreamsHistory(newStreams);
+    }, [history, historyIndex]);
+
+    const canUndo = historyIndex > 0;
+    const canRedo = historyIndex < history.length - 1;
+
+    const handleUndo = useCallback(() => {
+        if (canUndo) {
+            setHistoryIndex(prevIndex => prevIndex - 1);
+        }
+    }, [canUndo]);
+
+    const handleRedo = useCallback(() => {
+        if (canRedo) {
+            setHistoryIndex(prevIndex => prevIndex + 1);
+        }
+    }, [canRedo]);
+
 
     // Dihapus useCallback untuk memastikan fungsi tidak pernah stale
     const setUserLicenseStatus = (userId: string, isActive: boolean) => {
@@ -101,7 +132,16 @@ const App: React.FC = () => {
     const renderPage = () => {
         switch (currentPage) {
             case 'dashboard':
-                return <Dashboard streams={streams} onEdit={startEditingStream} onDelete={deleteStream} onCreate={startCreatingStream} />;
+                return <Dashboard 
+                    streams={streams} 
+                    onEdit={startEditingStream} 
+                    onDelete={deleteStream} 
+                    onCreate={startCreatingStream}
+                    onUndo={handleUndo}
+                    onRedo={handleRedo}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
+                />;
             case 'edit-stream':
                 return <StreamEditor stream={editingStream} onSave={saveStream} onCancel={() => handleNavigation('dashboard')} />;
             case 'settings':
@@ -109,7 +149,16 @@ const App: React.FC = () => {
             case 'user-management':
                 return <UserManagement users={users.filter(u => u.role !== 'master')} onSetUserLicenseStatus={setUserLicenseStatus} />;
             default:
-                return <Dashboard streams={streams} onEdit={startEditingStream} onDelete={deleteStream} onCreate={startCreatingStream} />;
+                return <Dashboard 
+                    streams={streams} 
+                    onEdit={startEditingStream} 
+                    onDelete={deleteStream} 
+                    onCreate={startCreatingStream} 
+                    onUndo={handleUndo}
+                    onRedo={handleRedo}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
+                />;
         }
     };
 
