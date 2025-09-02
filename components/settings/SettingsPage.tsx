@@ -1,77 +1,200 @@
+
 import React, { useState, useEffect } from 'react';
 import Card from '../ui/Card';
 import Toggle from '../ui/Toggle';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { YouTubeIcon, FacebookIcon, TwitchIcon, TikTokIcon, InstagramIcon, CheckCircleIcon, TrashIcon, PlusIcon } from '../icons/Icons';
-import { validateApiKey } from '../../services/geminiService';
 import Spinner from '../ui/Spinner';
+import { CheckCircleIcon, WarningIcon, YouTubeIcon, FacebookIcon, TwitchIcon, TikTokIcon, InstagramIcon, CustomStreamIcon, LinkIcon, UnlinkIcon } from '../icons/Icons';
+import { validateApiKey } from '../../services/geminiService';
+import { ConnectedAccount, Platform, mockBrowsableAccounts, SimulatedPlatformAccount } from '../../types';
+import OAuthSimModal from './OAuthSimModal';
+
+const platformIcons: Record<Platform, React.ReactNode> = {
+    [Platform.YouTube]: <YouTubeIcon className="h-6 w-6 text-[#FF0000]" />,
+    [Platform.Facebook]: <FacebookIcon className="h-6 w-6 text-[#1877F2]" />,
+    [Platform.Twitch]: <TwitchIcon className="h-6 w-6 text-[#9146FF]" />,
+    [Platform.TikTok]: <TikTokIcon className="h-6 w-6" />,
+    [Platform.Instagram]: <InstagramIcon className="h-6 w-6 text-[#E4405F]" />,
+    [Platform.Custom]: <CustomStreamIcon className="h-6 w-6 text-gray-400" />,
+};
 
 const SettingsPage: React.FC = () => {
     const [previewMode, setPreviewMode] = useState(true);
-    const [apiKeys, setApiKeys] = useState<string[]>([]);
-    const [newApiKey, setNewApiKey] = useState('');
-    const [addSuccess, setAddSuccess] = useState(false);
-    const [isValidating, setIsValidating] = useState(false);
-    const [validationError, setValidationError] = useState('');
 
+    const [apiKeyInput, setApiKeyInput] = useState('');
+    const [apiKeyStatus, setApiKeyStatus] = useState<'loading' | 'valid' | 'invalid' | 'none'>('loading');
+    const [isSaving, setIsSaving] = useState(false);
+    
+    const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [platformToConnect, setPlatformToConnect] = useState<Platform | null>(null);
+
+    // Efek untuk memuat data dari localStorage saat komponen pertama kali dirender
     useEffect(() => {
-        const storedKeys = localStorage.getItem('geminiApiKeys');
-        if (storedKeys) {
-            try {
-                const parsedKeys = JSON.parse(storedKeys);
-                if (Array.isArray(parsedKeys)) {
-                    setApiKeys(parsedKeys);
-                }
-            } catch (e) {
-                console.error("Gagal mem-parsing kunci API dari localStorage:", e);
-                localStorage.removeItem('geminiApiKeys');
+        // Logika untuk kunci API Gemini
+        const checkSavedKey = async () => {
+            const savedKey = localStorage.getItem('gemini_api_key');
+            if (savedKey) {
+                setApiKeyInput(savedKey);
+                const isValid = await validateApiKey(savedKey);
+                setApiKeyStatus(isValid ? 'valid' : 'invalid');
+            } else {
+                setApiKeyStatus('none');
             }
+        };
+        checkSavedKey();
+
+        // Logika untuk akun terhubung
+        try {
+            const savedAccountsRaw = localStorage.getItem('connected_accounts');
+            if (savedAccountsRaw) {
+                setConnectedAccounts(JSON.parse(savedAccountsRaw));
+            } else {
+                // Jika tidak ada data, buat beberapa akun demo untuk memastikan streaming awal berfungsi
+                const demoAccounts: ConnectedAccount[] = [
+                    { id: 'yt-gaming', platform: Platform.YouTube, name: 'Channel Gaming Saya' },
+                    { id: 'twitch-main', platform: Platform.Twitch, name: 'Akun Twitch Utama' },
+                    { id: 'fb-page-official', platform: Platform.Facebook, name: 'Halaman Facebook Resmi' },
+                ];
+                localStorage.setItem('connected_accounts', JSON.stringify(demoAccounts));
+                setConnectedAccounts(demoAccounts);
+            }
+        } catch (e) {
+            console.error("Tidak dapat memuat atau membuat akun yang terhubung dari localStorage", e);
         }
     }, []);
-    
-    const handleAddApiKey = async () => {
-        if (!newApiKey) return;
 
-        setIsValidating(true);
-        setValidationError('');
-        setAddSuccess(false);
-
-        const isValid = await validateApiKey(newApiKey);
-
+    const handleSaveApiKey = async () => {
+        setIsSaving(true);
+        const isValid = await validateApiKey(apiKeyInput);
         if (isValid) {
-            if (!apiKeys.includes(newApiKey)) {
-                const updatedKeys = [...apiKeys, newApiKey];
-                setApiKeys(updatedKeys);
-                localStorage.setItem('geminiApiKeys', JSON.stringify(updatedKeys));
-                setNewApiKey('');
-                setAddSuccess(true);
-                setTimeout(() => setAddSuccess(false), 3000);
-            } else {
-                 setValidationError('Kunci API ini sudah ditambahkan.');
-            }
+            localStorage.setItem('gemini_api_key', apiKeyInput);
+            setApiKeyStatus('valid');
         } else {
-            setValidationError('Kunci API tidak valid. Harap periksa kembali atau coba kunci lain.');
+            localStorage.removeItem('gemini_api_key');
+            setApiKeyStatus('invalid');
         }
+        setIsSaving(false);
+    };
+    
+    const handleOpenConnectModal = (platform: Platform) => {
+        setPlatformToConnect(platform);
+        setIsModalOpen(true);
+    };
+    
+    const handleConnectAccount = (simulatedAccount: SimulatedPlatformAccount) => {
+        const newAccount: ConnectedAccount = {
+            id: simulatedAccount.id,
+            platform: simulatedAccount.platform,
+            name: simulatedAccount.name,
+        };
 
-        setIsValidating(false);
+        const newAccounts = [...connectedAccounts, newAccount];
+        setConnectedAccounts(newAccounts);
+        localStorage.setItem('connected_accounts', JSON.stringify(newAccounts));
+        setIsModalOpen(false);
+        setPlatformToConnect(null);
+    };
+    
+    const handleDisconnectAccount = (accountId: string) => {
+        const newAccounts = connectedAccounts.filter(acc => acc.id !== accountId);
+        setConnectedAccounts(newAccounts);
+        localStorage.setItem('connected_accounts', JSON.stringify(newAccounts));
     };
 
-    const handleDeleteApiKey = (keyToDelete: string) => {
-        const updatedKeys = apiKeys.filter(key => key !== keyToDelete);
-        setApiKeys(updatedKeys);
-        localStorage.setItem('geminiApiKeys', JSON.stringify(updatedKeys));
-    };
 
-    const maskApiKey = (key: string) => {
-        if (key.length < 8) return '****';
-        return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+    const getStatusMessage = () => {
+        switch (apiKeyStatus) {
+            case 'loading':
+                return <p className="text-sm text-yellow-400 mt-2">Memvalidasi kunci yang tersimpan...</p>;
+            case 'valid':
+                return <p className="text-sm text-green-400 mt-2 flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1"/>Kunci API valid dan tersimpan.</p>;
+            case 'invalid':
+                return <p className="text-sm text-red-400 mt-2 flex items-center"><WarningIcon className="h-4 w-4 mr-1"/>Kunci API tidak valid atau telah kedaluwarsa.</p>;
+            case 'none':
+                return <p className="text-sm text-text-secondary mt-2">Tidak ada kunci API tersimpan. Fitur AI tidak aktif.</p>;
+            default:
+                return null;
+        }
+    };
+    
+    const getAvailableAccountsForPlatform = (platform: Platform): SimulatedPlatformAccount[] => {
+        const connectedIds = new Set(connectedAccounts.map(acc => acc.id));
+        return mockBrowsableAccounts.filter(
+            acc => acc.platform === platform && !connectedIds.has(acc.id)
+        );
     };
 
     return (
         <div>
             <h1 className="text-3xl font-bold mb-6">Pengaturan</h1>
-            <div className="space-y-8 max-w-2xl">
+            <div className="space-y-8 max-w-3xl">
+                <Card>
+                    <h2 className="text-xl font-semibold mb-4 border-b border-secondary pb-2">Konfigurasi AI Gemini</h2>
+                    <p className="text-sm text-text-secondary mb-4">
+                        Masukkan kunci API Google Gemini Anda untuk mengaktifkan fitur pembuatan konten otomatis. Anda dapat memperoleh kunci dari Google AI Studio.
+                    </p>
+                    <div className="flex items-start space-x-2">
+                        <Input 
+                            label="Kunci API Gemini" 
+                            type="password" 
+                            value={apiKeyInput}
+                            onChange={(e) => setApiKeyInput(e.target.value)}
+                            className="flex-grow"
+                            placeholder="Masukkan kunci API Anda"
+                        />
+                        <div className="pt-7">
+                            <Button onClick={handleSaveApiKey} disabled={isSaving}>
+                                {isSaving ? <Spinner /> : 'Simpan & Validasi'}
+                            </Button>
+                        </div>
+                    </div>
+                    {getStatusMessage()}
+                </Card>
+
+                <Card>
+                    <h2 className="text-xl font-semibold mb-4 border-b border-secondary pb-2">Akun Terhubung</h2>
+                    <p className="text-sm text-text-secondary mb-4">
+                        Hubungkan akun platform Anda untuk mengaktifkan streaming terintegrasi. Ini adalah simulasi dari alur otorisasi OAuth.
+                    </p>
+                    <div className="space-y-4">
+                        {Object.values(Platform).map(platform => {
+                            if (platform === Platform.Custom) return null; // Lewati RTMP kustom karena tidak memiliki akun
+                            const accountsForPlatform = connectedAccounts.filter(acc => acc.platform === platform);
+                            const canConnectMore = getAvailableAccountsForPlatform(platform).length > 0;
+                           
+                            return (
+                                <div key={platform} className="p-4 bg-background rounded-lg border border-secondary">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center">
+                                            {platformIcons[platform]}
+                                            <span className="ml-4 text-lg font-medium">{platform}</span>
+                                        </div>
+                                        <Button size="sm" onClick={() => handleOpenConnectModal(platform)} disabled={!canConnectMore} title={canConnectMore ? `Hubungkan akun ${platform} baru` : "Semua akun simulasi sudah terhubung"}>
+                                            <LinkIcon className="h-4 w-4 mr-2" /> Hubungkan Akun
+                                        </Button>
+                                    </div>
+                                    <div className="mt-4 pl-10 space-y-2">
+                                        {accountsForPlatform.length > 0 ? (
+                                            accountsForPlatform.map(acc => (
+                                                <div key={acc.id} className="flex items-center justify-between gap-3 bg-secondary px-3 py-2 rounded-md">
+                                                    <span className="text-sm text-text-primary">{acc.name}</span>
+                                                    <Button size="sm" variant="danger" onClick={() => handleDisconnectAccount(acc.id)} title="Putuskan akun">
+                                                        <UnlinkIcon className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-sm text-text-secondary">Tidak ada akun terhubung</p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </Card>
+
                 <Card>
                     <h2 className="text-xl font-semibold mb-4 border-b border-secondary pb-2">Umum</h2>
                     <div className="py-4">
@@ -85,113 +208,17 @@ const SettingsPage: React.FC = () => {
                         </p>
                     </div>
                 </Card>
-
-                <Card>
-                    <h2 className="text-xl font-semibold mb-4 border-b border-secondary pb-2">Konfigurasi API Gemini</h2>
-                    <p className="text-sm text-text-secondary mb-4">
-                        Tambahkan satu atau lebih kunci API Google Gemini. Sistem akan secara otomatis mencoba kunci berikutnya jika salah satu gagal.
-                    </p>
-                    <div className="space-y-4">
-                        <div className="flex gap-2 items-start">
-                             <div className="flex-grow">
-                                <Input 
-                                    label="Kunci API Gemini Baru"
-                                    type="password"
-                                    value={newApiKey}
-                                    onChange={(e) => setNewApiKey(e.target.value)}
-                                    placeholder="Masukkan kunci API Anda"
-                                    className="flex-grow"
-                                    disabled={isValidating}
-                                />
-                                {validationError && <p className="text-red-400 text-sm mt-1">{validationError}</p>}
-                            </div>
-                            <Button onClick={handleAddApiKey} disabled={!newApiKey || isValidating} className="mt-7">
-                                {isValidating ? <Spinner /> : <><PlusIcon className="h-5 w-5 mr-2" /> Tambah</>}
-                            </Button>
-                        </div>
-                        {addSuccess && (
-                            <div className="flex items-center text-green-400 text-sm">
-                                <CheckCircleIcon className="h-5 w-5 mr-2" />
-                                <span>Kunci berhasil divalidasi dan ditambahkan!</span>
-                            </div>
-                        )}
-                        <div className="space-y-2 pt-2">
-                            <h3 className="text-sm font-medium text-text-secondary">Kunci Tersimpan:</h3>
-                            {apiKeys.length > 0 ? (
-                                <ul className="space-y-2">
-                                    {apiKeys.map((key, index) => (
-                                        <li key={index} className="flex items-center justify-between p-2 bg-background rounded-md">
-                                            <span className="font-mono text-sm text-text-primary">{maskApiKey(key)}</span>
-                                            <Button variant="danger" size="sm" onClick={() => handleDeleteApiKey(key)} title="Hapus Kunci">
-                                                <TrashIcon className="h-4 w-4" />
-                                            </Button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <p className="text-sm text-gray-500">Belum ada kunci API yang ditambahkan.</p>
-                            )}
-                        </div>
-                    </div>
-                     <div className="mt-6 pt-4 border-t border-secondary text-sm text-text-secondary">
-                        <p>
-                            Tidak punya kunci API? Dapatkan kunci Anda dari{' '}
-                            <a 
-                                href="https://aistudio.google.com/app/apikey" 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-accent hover:underline font-semibold"
-                            >
-                                Google AI Studio
-                            </a>.
-                        </p>
-                    </div>
-                </Card>
-
-                <Card>
-                    <h2 className="text-xl font-semibold mb-4 border-b border-secondary pb-2">Integrasi Platform</h2>
-                    <p className="text-sm text-text-secondary mb-6">
-                        Hubungkan akun Anda untuk mengelola acara langsung secara otomatis di setiap platform. Ini menghindari pengaturan kunci streaming manual untuk setiap siaran.
-                    </p>
-                    <div className="space-y-4">
-                       <div className="flex items-center justify-between p-4 bg-background rounded-lg">
-                            <div className="flex items-center">
-                                <YouTubeIcon className="h-8 w-8 text-red-600" />
-                                <span className="ml-4 font-medium">YouTube</span>
-                            </div>
-                           <Button variant="secondary" onClick={() => alert('Menghubungkan ke YouTube... (simulasi)')}>Hubungkan</Button>
-                       </div>
-                       <div className="flex items-center justify-between p-4 bg-background rounded-lg">
-                           <div className="flex items-center">
-                                <FacebookIcon className="h-8 w-8 text-blue-600" />
-                                <span className="ml-4 font-medium">Facebook</span>
-                            </div>
-                           <Button variant="secondary" onClick={() => alert('Menghubungkan ke Facebook... (simulasi)')}>Hubungkan</Button>
-                       </div>
-                       <div className="flex items-center justify-between p-4 bg-background rounded-lg">
-                            <div className="flex items-center">
-                                <TwitchIcon className="h-8 w-8 text-purple-600" />
-                                <span className="ml-4 font-medium">Twitch</span>
-                            </div>
-                           <Button variant="secondary" onClick={() => alert('Menghubungkan ke Twitch... (simulasi)')}>Hubungkan</Button>
-                       </div>
-                       <div className="flex items-center justify-between p-4 bg-background rounded-lg">
-                            <div className="flex items-center">
-                                <TikTokIcon className="h-8 w-8" />
-                                <span className="ml-4 font-medium">TikTok</span>
-                            </div>
-                           <Button variant="secondary" onClick={() => alert('Menghubungkan ke TikTok... (simulasi)')}>Hubungkan</Button>
-                       </div>
-                       <div className="flex items-center justify-between p-4 bg-background rounded-lg">
-                            <div className="flex items-center">
-                                <InstagramIcon className="h-8 w-8" />
-                                <span className="ml-4 font-medium">Instagram</span>
-                            </div>
-                           <Button variant="secondary" onClick={() => alert('Menghubungkan ke Instagram... (simulasi)')}>Hubungkan</Button>
-                       </div>
-                    </div>
-                </Card>
             </div>
+            
+            {platformToConnect && (
+                <OAuthSimModal 
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    onConnect={handleConnectAccount}
+                    platform={platformToConnect}
+                    availableAccounts={getAvailableAccountsForPlatform(platformToConnect)}
+                />
+            )}
         </div>
     );
 };

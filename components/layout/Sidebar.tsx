@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Page, UserRole } from '../../types';
-import { DashboardIcon, SettingsIcon, UsersIcon, StreamIcon } from '../icons/Icons';
+import { DashboardIcon, SettingsIcon, UsersIcon, StreamIcon, AnalyticsIcon } from '../icons/Icons';
 
 interface SidebarProps {
     onNavigate: (page: Page) => void;
@@ -11,6 +11,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ onNavigate, userRole }) => {
     const navItems = [
         { page: 'dashboard', label: 'Dasbor', icon: <DashboardIcon className="h-6 w-6" /> },
+        { page: 'analytics', label: 'Analitik', icon: <AnalyticsIcon className="h-6 w-6" /> },
         { page: 'settings', label: 'Pengaturan', icon: <SettingsIcon className="h-6 w-6" /> },
     ];
 

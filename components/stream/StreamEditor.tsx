@@ -1,14 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Stream, Destination, Platform, VideoSourceType, Recurrence, StreamStatus, Schedule, VideoSource, DayOfWeek } from '../../types';
+import { Stream, Destination, Platform, VideoSourceType, Recurrence, StreamStatus, Schedule, VideoSource, DayOfWeek, AdvancedSettings, initialVideoAssets, VideoAsset, DestinationType, ManualDestination, IntegratedDestination, ConnectedAccount } from '../../types';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
-import { PlusIcon, TrashIcon, SparklesIcon } from '../icons/Icons';
+import { PlusIcon, TrashIcon, SparklesIcon, LibraryIcon } from '../icons/Icons';
 import { generateStreamDetails } from '../../services/geminiService';
 import Modal from '../ui/Modal';
 import Spinner from '../ui/Spinner';
 import Toggle from '../ui/Toggle';
+import VideoLibraryModal from './VideoLibraryModal';
+
 
 interface StreamEditorProps {
     stream: Stream | null;
@@ -41,6 +43,15 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
         time: '12:00',
         daysOfWeek: [],
     });
+    const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>({
+        bitrate: 4000,
+        resolution: '1080p',
+        fps: 30,
+        orientation: 'landscape',
+        followInput: false,
+        loopVideo: false,
+        smoothTransition: false,
+    });
     const [autoStop, setAutoStop] = useState(false);
     const [durationMinutes, setDurationMinutes] = useState(60);
     const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
@@ -49,15 +60,37 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
     const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
 
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+    const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [aiError, setAiError] = useState('');
+    const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
+    
+    const defaultAdvancedSettings: AdvancedSettings = {
+        bitrate: 4000,
+        resolution: '1080p',
+        fps: 30,
+        orientation: 'landscape',
+        followInput: false,
+        loopVideo: false,
+        smoothTransition: false,
+    };
 
     useEffect(() => {
         // Bersihkan URL objek pratinjau video sebelumnya untuk mencegah kebocoran memori
         if (videoPreviewUrl) {
             URL.revokeObjectURL(videoPreviewUrl);
             setVideoPreviewUrl(null);
+        }
+
+        // Muat akun yang terhubung dari localStorage
+        try {
+            const savedAccounts = localStorage.getItem('connected_accounts');
+            if (savedAccounts) {
+                setConnectedAccounts(JSON.parse(savedAccounts));
+            }
+        } catch (e) {
+            console.error("Tidak dapat memuat akun yang terhubung dari localStorage", e);
         }
 
         if (stream) {
@@ -71,6 +104,7 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
                 ...stream.schedule,
                 datetime: stream.schedule.datetime ? stream.schedule.datetime.substring(0, 16) : new Date(Date.now() + 3600 * 1000).toISOString().substring(0, 16),
             });
+            setAdvancedSettings(stream.advancedSettings || defaultAdvancedSettings);
             setAutoStop(stream.schedule.autoStop || false);
             setDurationMinutes(stream.schedule.durationMinutes || 60);
         } else {
@@ -89,6 +123,7 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
                 time: '12:00',
                 daysOfWeek: [],
             });
+            setAdvancedSettings(defaultAdvancedSettings);
             setAutoStop(false);
             setDurationMinutes(60);
         }
@@ -104,15 +139,48 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
     }, [videoPreviewUrl]);
     
     const handleAddDestination = () => {
-        setDestinations([...destinations, { id: `dest-${Date.now()}`, platform: Platform.YouTube, streamKey: '' }]);
+        const newDestination: ManualDestination = {
+            id: `dest-${Date.now()}`,
+            type: 'manual',
+            platform: Platform.YouTube,
+            streamKey: ''
+        };
+        setDestinations([...destinations, newDestination]);
     };
     
     const handleRemoveDestination = (id: string) => {
         setDestinations(destinations.filter(d => d.id !== id));
     };
 
-    const handleDestinationChange = (id: string, field: keyof Destination, value: string) => {
-        setDestinations(destinations.map(d => d.id === id ? { ...d, [field]: value } : d));
+    const handleDestinationChange = (id: string, field: string, value: any) => {
+        setDestinations(destinations.map(d => {
+            if (d.id !== id) return d;
+
+            if (field === 'type') {
+                if (value === 'manual') {
+                    return { id, type: 'manual', platform: d.platform, streamKey: '' } as ManualDestination;
+                } else {
+                    const availableAccounts = connectedAccounts.filter(acc => acc.platform === d.platform);
+                    const firstAccount = availableAccounts[0];
+                    return { id, type: 'integrated', platform: d.platform, accountId: firstAccount?.id || '', accountName: firstAccount?.name || '' } as IntegratedDestination;
+                }
+            }
+
+            if (field === 'platform') {
+                 if (d.type === 'integrated') {
+                    const availableAccounts = connectedAccounts.filter(acc => acc.platform === value);
+                    const firstAccount = availableAccounts[0];
+                     return { ...d, platform: value, accountId: firstAccount?.id || '', accountName: firstAccount?.name || '' };
+                 }
+            }
+            
+            if (field === 'accountId') {
+                const selectedAccount = connectedAccounts.find(acc => acc.id === value);
+                return { ...d, accountId: value, accountName: selectedAccount?.name || '' };
+            }
+
+            return { ...d, [field]: value };
+        }));
     };
     
     const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -143,6 +211,16 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
             const newPreviewUrl = URL.createObjectURL(file);
             setVideoPreviewUrl(newPreviewUrl);
         }
+    };
+    
+    const handleSelectVideoFromLibrary = (video: VideoAsset) => {
+        setVideoSource({ type: VideoSourceType.Upload, path: video.name });
+        // Bersihkan pratinjau file yang mungkin ada
+        if (videoPreviewUrl) {
+             URL.revokeObjectURL(videoPreviewUrl);
+             setVideoPreviewUrl(null);
+        }
+        setIsLibraryModalOpen(false);
     };
 
 
@@ -188,6 +266,7 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
             destinations,
             schedule: finalSchedule,
             status: stream?.status || StreamStatus.Scheduled,
+            advancedSettings,
         };
         onSave(finalStream);
     };
@@ -261,6 +340,22 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
                              {videoSource.type === VideoSourceType.Upload ? (
                                 <div>
                                     <label className="block text-sm font-medium text-text-secondary mb-2">File Video</label>
+                                    <div className="flex space-x-2">
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={() => videoFileInputRef.current?.click()}
+                                        >
+                                            Pilih File Video
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={() => setIsLibraryModalOpen(true)}
+                                        >
+                                            <LibraryIcon className="h-5 w-5 mr-2" /> Pustaka
+                                        </Button>
+                                    </div>
                                     <input
                                         type="file"
                                         accept="video/*"
@@ -268,16 +363,9 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
                                         onChange={handleVideoFileChange}
                                         className="hidden"
                                     />
-                                    <Button
-                                        type="button"
-                                        variant="secondary"
-                                        onClick={() => videoFileInputRef.current?.click()}
-                                    >
-                                        Pilih File Video
-                                    </Button>
-                                    {stream && videoSource.path && !videoPreviewUrl && (
+                                    {(videoSource.path && !videoPreviewUrl) && (
                                         <p className="text-sm text-text-secondary mt-2">
-                                            File saat ini: {videoSource.path} (Pilih file baru untuk mengganti)
+                                            File saat ini: {videoSource.path}
                                         </p>
                                     )}
                                     {videoPreviewUrl && (
@@ -302,25 +390,123 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
                         </Button>
                     </div>
                      <div className="space-y-4">
-                        {destinations.map(dest => (
-                            <div key={dest.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end p-4 bg-background rounded-md">
-                                 <div>
-                                    <label className="block text-sm font-medium text-text-secondary mb-1">Platform</label>
-                                    <select value={dest.platform} onChange={(e) => handleDestinationChange(dest.id, 'platform', e.target.value)} className="w-full bg-secondary border border-gray-600 text-text-primary rounded-md p-2 focus:ring-accent focus:border-accent transition">
-                                        {Object.values(Platform).map(p => <option key={p} value={p}>{p}</option>)}
-                                    </select>
+                        {destinations.map(dest => {
+                            const availableAccounts = connectedAccounts.filter(acc => acc.platform === dest.platform);
+                            return (
+                                <div key={dest.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 bg-background rounded-md">
+                                    <div>
+                                        <label className="block text-sm font-medium text-text-secondary mb-1">Platform</label>
+                                        <select value={dest.platform} onChange={(e) => handleDestinationChange(dest.id, 'platform', e.target.value)} className="w-full bg-secondary border border-gray-600 text-text-primary rounded-md p-2 focus:ring-accent focus:border-accent transition">
+                                            {Object.values(Platform).map(p => <option key={p} value={p}>{p}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-text-secondary mb-1">Tipe</label>
+                                        <select value={dest.type} onChange={(e) => handleDestinationChange(dest.id, 'type', e.target.value)} className="w-full bg-secondary border border-gray-600 text-text-primary rounded-md p-2 focus:ring-accent focus:border-accent transition">
+                                            <option value="manual">Manual (Kunci Streaming)</option>
+                                            <option value="integrated">Akun Terhubung</option>
+                                        </select>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        {dest.type === 'manual' ? (
+                                            <Input label="Kunci Streaming" type="password" value={(dest as ManualDestination).streamKey} onChange={(e) => handleDestinationChange(dest.id, 'streamKey', e.target.value)} placeholder="tempel kunci streaming Anda di sini" />
+                                        ) : (
+                                            <div>
+                                                <label className="block text-sm font-medium text-text-secondary mb-1">Akun</label>
+                                                <select
+                                                    value={(dest as IntegratedDestination).accountId}
+                                                    onChange={(e) => handleDestinationChange(dest.id, 'accountId', e.target.value)}
+                                                    className="w-full bg-secondary border border-gray-600 text-text-primary rounded-md p-2 focus:ring-accent focus:border-accent transition disabled:opacity-70 disabled:cursor-not-allowed"
+                                                    disabled={availableAccounts.length === 0}
+                                                >
+                                                    {availableAccounts.length > 0 ? (
+                                                        availableAccounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)
+                                                    ) : (
+                                                        <option value="">Hubungkan akun di Pengaturan</option>
+                                                    )}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="md:col-start-5 flex justify-end">
+                                        <Button variant="danger" onClick={() => handleRemoveDestination(dest.id)}><TrashIcon className="h-5 w-5" /></Button>
+                                    </div>
                                 </div>
-                                <div className="md:col-span-2">
-                                    <Input label="Kunci Streaming" type="password" value={dest.streamKey} onChange={(e) => handleDestinationChange(dest.id, 'streamKey', e.target.value)} placeholder="tempel kunci streaming Anda di sini" />
-                                </div>
-                                <div className="md:col-start-4 flex justify-end">
-                                    <Button variant="danger" onClick={() => handleRemoveDestination(dest.id)}><TrashIcon className="h-5 w-5" /></Button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
+                         {destinations.length === 0 && <p className="text-center text-text-secondary py-4">Belum ada tujuan ditambahkan.</p>}
                     </div>
                 </Card>
                 
+                 <Card>
+                    <h2 className="text-xl font-semibold mb-4">Pengaturan Lanjutan</h2>
+                     <div className="mb-6 pb-4 border-b border-secondary">
+                        <Toggle 
+                            label="Ikuti Pengaturan Video Input"
+                            enabled={advancedSettings.followInput || false}
+                            onChange={(enabled) => setAdvancedSettings(prev => ({ ...prev, followInput: enabled }))}
+                        />
+                        <p className="text-sm text-text-secondary mt-2">
+                            Jika diaktifkan, pengaturan di bawah ini akan diabaikan dan FFmpeg akan mencoba menggunakan pengaturan dari file video sumber.
+                        </p>
+                    </div>
+                    <div className="mb-6 pb-4 border-b border-secondary">
+                        <Toggle 
+                            label="Looping Video"
+                            enabled={advancedSettings.loopVideo || false}
+                            onChange={(enabled) => setAdvancedSettings(prev => ({ ...prev, loopVideo: enabled, smoothTransition: enabled ? prev.smoothTransition : false }))}
+                        />
+                        <p className="text-sm text-text-secondary mt-2">
+                            Jika diaktifkan, video akan diputar ulang secara terus menerus selama streaming berlangsung.
+                        </p>
+                        {advancedSettings.loopVideo && (
+                            <div className="mt-4 pl-6">
+                                <Toggle 
+                                    label="Transisi Halus"
+                                    enabled={advancedSettings.smoothTransition || false}
+                                    onChange={(enabled) => setAdvancedSettings(prev => ({ ...prev, smoothTransition: enabled }))}
+                                />
+                                <p className="text-sm text-text-secondary mt-2">
+                                    Menambahkan efek crossfade antar putaran video untuk transisi yang mulus. Mungkin sedikit meningkatkan penggunaan CPU.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                            <label htmlFor="bitrate" className="block text-sm font-medium text-text-secondary mb-1">Bitrate</label>
+                            <select id="bitrate" value={advancedSettings.bitrate} onChange={e => setAdvancedSettings({...advancedSettings, bitrate: Number(e.target.value) as AdvancedSettings['bitrate']})} className="w-full bg-secondary border border-gray-600 text-text-primary rounded-md p-2 focus:ring-accent focus:border-accent transition disabled:opacity-50 disabled:cursor-not-allowed" disabled={advancedSettings.followInput}>
+                                <option value="2500">2500 Kbps</option>
+                                <option value="4000">4000 Kbps</option>
+                                <option value="6000">6000 Kbps</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="resolution" className="block text-sm font-medium text-text-secondary mb-1">Resolusi</label>
+                            <select id="resolution" value={advancedSettings.resolution} onChange={e => setAdvancedSettings({...advancedSettings, resolution: e.target.value as AdvancedSettings['resolution']})} className="w-full bg-secondary border border-gray-600 text-text-primary rounded-md p-2 focus:ring-accent focus:border-accent transition disabled:opacity-50 disabled:cursor-not-allowed" disabled={advancedSettings.followInput}>
+                                <option value="720p">720p</option>
+                                <option value="1080p">1080p</option>
+                                <option value="1440p">1440p</option>
+                                <option value="2160p">2160p (4K)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="fps" className="block text-sm font-medium text-text-secondary mb-1">FPS</label>
+                            <select id="fps" value={advancedSettings.fps} onChange={e => setAdvancedSettings({...advancedSettings, fps: Number(e.target.value) as AdvancedSettings['fps']})} className="w-full bg-secondary border border-gray-600 text-text-primary rounded-md p-2 focus:ring-accent focus:border-accent transition disabled:opacity-50 disabled:cursor-not-allowed" disabled={advancedSettings.followInput}>
+                                <option value="30">30 FPS</option>
+                                <option value="60">60 FPS</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="orientation" className="block text-sm font-medium text-text-secondary mb-1">Orientasi</label>
+                            <select id="orientation" value={advancedSettings.orientation} onChange={e => setAdvancedSettings({...advancedSettings, orientation: e.target.value as AdvancedSettings['orientation']})} className="w-full bg-secondary border border-gray-600 text-text-primary rounded-md p-2 focus:ring-accent focus:border-accent transition disabled:opacity-50 disabled:cursor-not-allowed" disabled={advancedSettings.followInput}>
+                                <option value="landscape">Landscape</option>
+                                <option value="portrait">Portrait</option>
+                            </select>
+                        </div>
+                    </div>
+                </Card>
+
                 <Card>
                     <h2 className="text-xl font-semibold mb-4">Penjadwalan</h2>
                     <div className="space-y-6">
@@ -427,6 +613,13 @@ const StreamEditor: React.FC<StreamEditorProps> = ({ stream, onSave, onCancel })
                     </div>
                 </div>
             </Modal>
+
+            <VideoLibraryModal
+                isOpen={isLibraryModalOpen}
+                onClose={() => setIsLibraryModalOpen(false)}
+                videos={initialVideoAssets}
+                onSelectVideo={handleSelectVideoFromLibrary}
+            />
         </div>
     );
 };

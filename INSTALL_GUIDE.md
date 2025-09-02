@@ -1,210 +1,123 @@
-# Panduan Instalasi AL ANSHOR LIVE STREAM di VPS (Diperbaiki)
+# Panduan Deployment AL ANSHOR LIVE STREAM di VPS
 
-Panduan ini telah diperbarui dengan proses build yang benar untuk aplikasi React/TypeScript. Mengikuti langkah-langkah ini akan mengatasi masalah layar kosong.
-
-## Konsep Kunci: Proses Build
-
-Aplikasi ini ditulis dalam TypeScript (TSX), yang tidak dapat dijalankan langsung oleh browser. Kita harus menggunakan "build tool" (seperti Vite) untuk mengkompilasi dan membundel kode sumber menjadi file HTML, JavaScript, dan CSS statis yang siap untuk produksi. Panduan ini menambahkan langkah build yang hilang tersebut.
+Panduan ini dirancang untuk mendeploy antarmuka (frontend) aplikasi ini di server Anda menggunakan metode modern yang andal dan ringan, sesuai untuk lingkungan VPS.
 
 ---
 
-## Langkah 1: Prasyarat
+## 1. Arsitektur Proyek: Frontend vs. Backend (Penting!)
 
-1.  **Server VPS**: Server yang menjalankan Ubuntu 22.04 atau lebih baru.
-2.  **Akses Root/Sudo**: Hak akses administratif di server Anda.
-3.  **Node.js dan npm**: Diperlukan untuk build process dan menjalankan server.
-    - Jika belum terinstal, jalankan:
-      ```bash
-      curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-      sudo apt-get install -y nodejs
-      ```
+Repositori ini hanya berisi **Frontend** (panel kontrol web). Ini adalah antarmuka pengguna grafis (GUI) tempat Anda mengelola streaming secara visual.
 
----
+-   **Frontend (Kode ini):** Sebuah aplikasi React yang berjalan di browser pengguna. Tugasnya adalah mengirim perintah ke backend Anda.
+-   **Backend (Tanggung Jawab Anda):** Ini adalah "mesin" yang berjalan di VPS Anda, yang harus Anda bangun secara terpisah. Backend akan menerima perintah dari Frontend (misalnya, melalui API) dan melakukan pekerjaan berat:
+    -   Menjalankan `ffmpeg` untuk memproses dan menyiarkan video.
+    -   Menggunakan `tmux` untuk menjaga proses streaming tetap berjalan di latar belakang.
+    -   Semua ini idealnya juga dikelola dalam kontainer **Docker** terpisah untuk backend.
 
-## Langkah 2: Dapatkan Kode Aplikasi dan Konfigurasi Proyek
-
-1.  **Instal Git dan Clone Repositori**:
-    ```bash
-    sudo apt update && sudo apt install git -y
-    # Ganti dengan URL repositori Git Anda
-    git clone https://github.com/tokoalanshor2020-source/al-anshor-livestream.git
-    cd al-anshor-livestream
-    ```
-
-2.  **Buat file `package.json`**:
-    Ini adalah file paling penting yang mendefinisikan proyek, dependensi, dan skrip. Buat file bernama `package.json` di root proyek:
-    ```bash
-    nano package.json
-    ```
-    Tempel konten berikut ke dalam file:
-    ```json
-    {
-      "name": "al-anshor-livestream",
-      "private": true,
-      "version": "0.0.0",
-      "type": "module",
-      "scripts": {
-        "dev": "vite",
-        "build": "vite build",
-        "preview": "vite preview"
-      },
-      "dependencies": {
-        "@google/genai": "^1.16.0",
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0"
-      },
-      "devDependencies": {
-        "@types/react": "^18.2.37",
-        "@types/react-dom": "^18.2.15",
-        "@vitejs/plugin-react": "^4.2.0",
-        "typescript": "^5.2.2",
-        "vite": "^5.0.0"
-      }
-    }
-    ```
-
-3.  **Buat file `vite.config.ts`**:
-    Ini adalah file konfigurasi untuk build tool Vite. Buat file bernama `vite.config.ts`:
-    ```bash
-    nano vite.config.ts
-    ```
-    Tempel konten berikut:
-    ```typescript
-    import { defineConfig } from 'vite'
-    import react from '@vitejs/plugin-react'
-
-    // https://vitejs.dev/config/
-    export default defineConfig({
-      plugins: [react()],
-      server: {
-        host: '0.0.0.0'
-      }
-    })
-    ```
-    
-4.  **Buat file `tsconfig.json`**:
-    File ini mengkonfigurasi bagaimana TypeScript mengkompilasi kode Anda. Buat file `tsconfig.json`:
-    ```bash
-    nano tsconfig.json
-    ```
-    Tempel konten berikut:
-    ```json
-    {
-      "compilerOptions": {
-        "target": "ES2020",
-        "useDefineForClassFields": true,
-        "lib": ["ES2020", "DOM", "DOM.Iterable"],
-        "module": "ESNext",
-        "skipLibCheck": true,
-
-        /* Bundler mode */
-        "moduleResolution": "bundler",
-        "allowImportingTsExtensions": true,
-        "resolveJsonModule": true,
-        "isolatedModules": true,
-        "noEmit": true,
-        "jsx": "react-jsx",
-
-        /* Linting */
-        "strict": true,
-        "noUnusedLocals": true,
-        "noUnusedParameters": true,
-        "noFallthroughCasesInSwitch": true
-      },
-      "include": ["."],
-      "references": [{ "path": "./tsconfig.node.json" }]
-    }
-    ```
-
-5.  **Buat file `tsconfig.node.json`**:
-    ```bash
-    nano tsconfig.node.json
-    ```
-    Tempel konten berikut:
-    ```json
-    {
-      "compilerOptions": {
-        "composite": true,
-        "skipLibCheck": true,
-        "module": "ESNext",
-        "moduleResolution": "bundler",
-        "allowSyntheticDefaultImports": true
-      },
-      "include": ["vite.config.ts"]
-    }
-    ```
+Panduan ini akan fokus pada cara menjalankan **Frontend** dengan benar dan efisien di VPS Anda.
 
 ---
 
-## Langkah 3: Instal Dependensi dan Build Aplikasi
+## 2. Metode Deployment: Docker (Sangat Direkomendasikan)
 
-Sekarang setelah proyek dikonfigurasi dengan benar, kita dapat menginstal paket yang diperlukan dan membuat file produksi.
+Ini adalah cara terbaik dan termudah. Docker mengisolasi aplikasi Anda, memastikannya berjalan secara konsisten, aman, dan tidak mengganggu layanan lain di server.
 
-1.  **Instal semua dependensi** dari `package.json`:
+### Prasyarat
+
+Anda perlu menginstal Docker dan Docker Compose di VPS Anda. Jika belum terinstal, jalankan perintah berikut:
+
+```bash
+# Perbarui daftar paket Anda
+sudo apt update
+
+# Instal paket yang diperlukan untuk mengizinkan apt menggunakan repositori melalui HTTPS
+sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+
+# Tambahkan GPG key resmi Docker
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+# Tambahkan repositori Docker ke sumber APT
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Instal Docker Engine dan Docker Compose
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+```
+Verifikasi instalasi dengan menjalankan: `sudo docker --version` dan `docker compose version`.
+
+### Langkah-langkah Deployment
+
+1.  **Salin Semua File Aplikasi**:
+    Pastikan semua file dari repositori ini (termasuk `Dockerfile`, `docker-compose.yml`, dan `nginx.conf` yang baru) berada dalam satu folder di VPS Anda, misalnya di `/home/user/alanshor-livestream`.
+
+2.  **Jalankan Aplikasi dengan Docker Compose**:
+    Masuk ke direktori aplikasi Anda, lalu jalankan satu perintah ini. Perintah ini akan membangun gambar Docker, membuat kontainer, dan menjalankannya di latar belakang.
     ```bash
-    npm install
+    cd /home/user/alanshor-livestream
+    docker compose up -d
     ```
+    - `-d` berarti *detached*, jadi proses berjalan permanen di latar belakang.
 
-2.  **Jalankan proses build**:
-    ```bash
-    npm run build
-    ```
-    Perintah ini akan membuat direktori baru bernama `dist` yang berisi semua file HTML, JS, dan CSS yang telah dioptimalkan dan siap untuk disajikan.
+Aplikasi Anda sekarang berjalan di dalam kontainer Docker pada port **3000**. Anda bisa memeriksanya dengan perintah `docker ps`.
 
 ---
 
-## Langkah 4: Jalankan Aplikasi dengan PM2
+## 3. Konfigurasi Nginx sebagai Reverse Proxy (Akses Publik)
 
-Kita akan menyajikan konten dari folder `dist`, bukan dari root proyek.
+Langkah ini sangat penting agar Anda dapat mengakses aplikasi melalui alamat IP publik VPS Anda (atau nama domain) tanpa perlu mengetik `:3000` di akhir URL.
 
-1.  **Instal `serve` dan `pm2`** (jika belum):
+1.  **Instal Nginx** (jika belum terinstal):
     ```bash
-    sudo npm install -g serve pm2
+    sudo apt update && sudo apt install nginx -y
     ```
 
-2.  **Jalankan aplikasi dari folder `dist`**:
+2.  **Buat file konfigurasi Nginx baru**:
     ```bash
-    pm2 start serve -s dist -l 3000 --name "al-anshor-frontend"
+    sudo nano /etc/nginx/sites-available/alanshor-livestream
     ```
-    - `-s dist`: Memberitahu `serve` untuk menyajikan konten dari folder `dist`.
 
-3.  **Simpan konfigurasi PM2** untuk restart otomatis:
-    ```bash
-    pm2 save
-    pm2 startup
-    ```
-    Ikuti instruksi di terminal. Aplikasi Anda sekarang berjalan di `http://ALAMAT_IP_VPS_ANDA:3000`.
+3.  **Tempel konfigurasi berikut ke dalam file**:
+    Ganti `ALAMAT_IP_VPS_ANDA` dengan IP publik VPS Anda atau domain yang Anda miliki.
 
----
-
-## Langkah 5 (Opsional): Konfigurasi Nginx sebagai Reverse Proxy
-
-Langkah ini tetap sama dan akan membuat aplikasi Anda dapat diakses di port 80 (HTTP default).
-
-1.  **Instal Nginx**: `sudo apt install nginx -y`
-2.  **Buat file konfigurasi**: `sudo nano /etc/nginx/sites-available/alanshor`
-3.  **Tempel konfigurasi berikut** (tidak ada perubahan dari sebelumnya):
     ```nginx
     server {
+        # Nginx akan mendengarkan di port 80 (HTTP standar)
         listen 80;
-        server_name ALAMAT_IP_VPS_ANDA; # Ganti dengan IP Anda
+        server_name ALAMAT_IP_VPS_ANDA; # Ganti dengan IP atau domain Anda
 
+        # Semua permintaan akan diteruskan ke aplikasi frontend
         location / {
-            proxy_pass http://localhost:3000;
+            # Arahkan lalu lintas ke aplikasi yang berjalan di port 3000
+            # (port yang diekspos oleh kontainer Docker kita)
+            proxy_pass http://127.0.0.1:3000;
+            
+            # Header penting untuk memastikan komunikasi yang benar
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection 'upgrade';
             proxy_set_header Host $host;
             proxy_cache_bypass $http_upgrade;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         }
     }
     ```
-4.  **Aktifkan situs dan restart Nginx**:
+
+4.  **Aktifkan Konfigurasi**:
     ```bash
-    sudo ln -s /etc/nginx/sites-available/alanshor /etc/nginx/sites-enabled/
+    # Buat tautan simbolis dari sites-available ke sites-enabled
+    sudo ln -s /etc/nginx/sites-available/alanshor-livestream /etc/nginx/sites-enabled/
+    
+    # Hapus konfigurasi default Nginx agar tidak bentrok (jika ada)
     sudo rm /etc/nginx/sites-enabled/default
+    
+    # Uji konfigurasi Nginx untuk memastikan tidak ada kesalahan
     sudo nginx -t
+    
+    # Jika pengujian berhasil, muat ulang Nginx untuk menerapkan perubahan
     sudo systemctl restart nginx
     ```
 
-Aplikasi Anda sekarang harus dapat diakses dan berjalan dengan benar di `http://ALAMAT_IP_VPS_ANDA`.
+## Selesai!
+
+Sekarang Anda dapat membuka browser web dan menavigasi ke `http://ALAMAT_IP_VPS_ANDA`. Anda akan melihat antarmuka AL ANSHOR LIVE STREAM, yang disajikan dengan aman dan efisien oleh Nginx dari dalam kontainer Docker yang ringan.

@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Stream, StreamStatus, Recurrence, Schedule, DayOfWeek } from '../../types';
+import { Stream, StreamStatus, Recurrence, Schedule, DayOfWeek, Destination } from '../../types';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { ClockIcon, EditIcon, TrashIcon, PlayIcon, YouTubeIcon, FacebookIcon, TwitchIcon, CustomStreamIcon, TikTokIcon, InstagramIcon, StopIcon, WarningIcon } from '../icons/Icons';
@@ -86,10 +87,13 @@ const StreamCard: React.FC<StreamCardProps> = ({ stream, onEdit, onDelete, onSta
                     
                     <div className="mb-4">
                         <p className="text-sm font-medium text-text-secondary mb-2">Tujuan:</p>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex flex-wrap items-center gap-2">
                             {stream.destinations.map(dest => (
-                                <div key={dest.id} className="p-2 bg-secondary rounded-full" title={dest.platform}>
+                                <div key={dest.id} className="flex items-center p-2 bg-secondary rounded-lg" title={dest.platform}>
                                     {platformIcons[dest.platform]}
+                                    {dest.type === 'integrated' && (
+                                        <span className="text-xs text-text-secondary ml-2 truncate" title={dest.accountName}>{dest.accountName}</span>
+                                    )}
                                 </div>
                             ))}
                         </div>

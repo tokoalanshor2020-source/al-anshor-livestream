@@ -10,6 +10,7 @@ import Dashboard from './components/dashboard/Dashboard';
 import StreamEditor from './components/stream/StreamEditor';
 import SettingsPage from './components/settings/SettingsPage';
 import UserManagement from './components/admin/UserManagement';
+import AnalyticsPage from './components/analytics/AnalyticsPage';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
@@ -217,6 +218,8 @@ const App: React.FC = () => {
                 />;
             case 'edit-stream':
                 return <StreamEditor stream={editingStream} onSave={saveStream} onCancel={() => handleNavigation('dashboard')} />;
+            case 'analytics':
+                return <AnalyticsPage streams={streams} />;
             case 'settings':
                 return <SettingsPage />;
             case 'user-management':
