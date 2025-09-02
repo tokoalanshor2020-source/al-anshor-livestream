@@ -55,7 +55,7 @@ Aplikasi ini berjalan di lingkungan Node.js. Kami akan menginstal Node.js dan PM
 2.  **Clone Repositori Aplikasi** (gantilah URL dengan URL repo Anda yang sebenarnya):
     ```bash
     # Ganti dengan URL repositori Git Anda yang sebenarnya
-    git clone https://github.com/placeholder/al-anshor-livestream.git
+    git clone https://github.com/tokoalanshor2020-source/al-anshor-livestream.git
     ```
 
 3.  **Masuk ke direktori aplikasi**:
