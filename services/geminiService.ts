@@ -6,36 +6,13 @@ interface StreamDetails {
     description: string;
 }
 
-const getApiKey = (): string | null => {
-    try {
-        return localStorage.getItem('gemini_api_key');
-    } catch (e) {
-        console.error("Could not access localStorage", e);
-        return null;
-    }
-};
-
-export const validateApiKey = async (apiKey: string): Promise<boolean> => {
-    if (!apiKey) return false;
-    try {
-        const ai = new GoogleGenAI({ apiKey });
-        await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: "validasi kunci",
-            config: { thinkingConfig: { thinkingBudget: 0 } } // Low-cost call
-        });
-        return true;
-    } catch (error) {
-        console.error("Validasi Kunci API Gagal:", error);
-        return false;
-    }
-};
-
+// Kunci API sekarang bersumber dari variabel lingkungan.
+// Proses deployment bertanggung jawab untuk membuat variabel ini tersedia.
+const apiKey = process.env.API_KEY;
 
 export const generateStreamDetails = async (prompt: string): Promise<StreamDetails> => {
-    const apiKey = getApiKey();
     if (!apiKey) {
-        throw new Error("Kunci API Gemini belum diatur. Silakan atur di halaman Pengaturan.");
+        throw new Error("Fitur AI tidak dikonfigurasi oleh administrator. Kunci API tidak tersedia.");
     }
 
     try {
@@ -85,7 +62,7 @@ export const generateStreamDetails = async (prompt: string): Promise<StreamDetai
     } catch (error: any) {
         console.error("Gagal saat memanggil Gemini API:", error);
         if (error.message.includes('API key not valid')) {
-             throw new Error("Kunci API Gemini tidak valid. Silakan periksa di halaman Pengaturan.");
+             throw new Error("Kunci API yang dikonfigurasi oleh administrator tidak valid.");
         }
         throw new Error("Gagal menghasilkan konten dengan AI. Silakan periksa konsol untuk detail teknis.");
     }

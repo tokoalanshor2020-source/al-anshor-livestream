@@ -145,11 +145,11 @@ const Dashboard: React.FC<DashboardProps> = ({ streams, onEdit, onDelete, onCrea
             <Modal isOpen={isTutorialModalOpen} onClose={() => setIsTutorialModalOpen(false)} title="Tutorial Pengoperasian Aplikasi">
                 <div className="space-y-4 text-text-secondary max-h-[70vh] overflow-y-auto pr-2">
                     <div>
-                        <h3 className="text-lg font-semibold text-text-primary mb-2">Langkah 1: Pengaturan Awal (Penting!)</h3>
+                        <h3 className="text-lg font-semibold text-text-primary mb-2">Langkah 1: Hubungkan Akun Anda (Penting!)</h3>
                         <ul className="list-disc list-inside space-y-2 pl-2">
                              <li>Buka halaman <strong>Pengaturan</strong>.</li>
                              <li>Di bagian "Akun Terhubung", klik "Hubungkan" (<LinkIcon className="h-4 w-4 inline-block"/>) untuk setiap platform yang ingin Anda gunakan. Anda dapat menghubungkan beberapa akun untuk platform yang sama (misalnya, beberapa channel YouTube).</li>
-                             <li>Di bagian "Konfigurasi AI Gemini", masukkan <strong>Kunci API Google Gemini</strong> Anda. Ini diperlukan untuk membuat judul dan deskripsi otomatis (<SparklesIcon className="h-4 w-4 inline-block text-accent"/>).</li>
+                             <li><strong>Catatan tentang Fitur AI:</strong> Fitur pembuatan judul dan deskripsi otomatis (<SparklesIcon className="h-4 w-4 inline-block text-accent"/>) diaktifkan oleh administrator Anda. Jika berfungsi, Anda dapat menggunakannya di editor streaming.</li>
                         </ul>
                     </div>
                     <div>
@@ -167,7 +167,7 @@ const Dashboard: React.FC<DashboardProps> = ({ streams, onEdit, onDelete, onCrea
                     <div>
                         <h3 className="text-lg font-semibold text-text-primary mb-2">Langkah 4: Mengisi Detail Streaming</h3>
                         <ul className="list-disc list-inside space-y-1 pl-2">
-                            <li><strong>Judul & Deskripsi:</strong> Beri judul dan deskripsi. Gunakan fitur AI (<SparklesIcon className="h-4 w-4 inline-block text-accent"/>) dengan memberikan topik untuk membuatnya secara otomatis (memerlukan Kunci API dari Langkah 1).</li>
+                            <li><strong>Judul & Deskripsi:</strong> Beri judul dan deskripsi. Gunakan fitur AI (<SparklesIcon className="h-4 w-4 inline-block text-accent"/>) dengan memberikan topik untuk membuatnya secara otomatis (jika diaktifkan oleh admin).</li>
                             <li><strong>Thumbnail:</strong> Klik pada area gambar untuk mengunggah thumbnail.</li>
                         </ul>
                     </div>

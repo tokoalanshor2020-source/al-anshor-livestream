@@ -11,15 +11,23 @@ import StreamEditor from './components/stream/StreamEditor';
 import SettingsPage from './components/settings/SettingsPage';
 import UserManagement from './components/admin/UserManagement';
 import AnalyticsPage from './components/analytics/AnalyticsPage';
+import { useStreamManager } from './hooks/useStreamManager';
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [currentPage, setCurrentPage] = useState<Page>('dashboard');
     
-    // History state for streams to enable undo/redo
-    const [history, setHistory] = useState<Stream[][]>([initialStreams]);
-    const [historyIndex, setHistoryIndex] = useState(0);
-    const streams = history[historyIndex];
+    // State management for streams is now handled by a custom hook
+    const { 
+        streams, 
+        setStreams, 
+        saveStream, 
+        deleteStream, 
+        handleUndo, 
+        handleRedo, 
+        canUndo, 
+        canRedo 
+    } = useStreamManager(initialStreams);
 
     const [users, setUsers] = useState<User[]>(initialUsers);
     const [editingStreamId, setEditingStreamId] = useState<string | null>(null);
@@ -29,13 +37,6 @@ const App: React.FC = () => {
     // Notification State
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [upcomingNotifiedIds, setUpcomingNotifiedIds] = useState<Set<string>>(new Set());
-
-
-    const updateStreamsHistory = (newStreams: Stream[]) => {
-        const newHistory = history.slice(0, historyIndex + 1);
-        setHistory([...newHistory, newStreams]);
-        setHistoryIndex(newHistory.length);
-    };
     
     const handleLogin = useCallback((loggedInUser: User) => {
         setUser(loggedInUser);
@@ -75,40 +76,11 @@ const App: React.FC = () => {
         setCurrentPage('edit-stream');
     }, []);
 
-    const saveStream = useCallback((stream: Stream) => {
-        const currentStreams = history[historyIndex];
-        const exists = currentStreams.some(s => s.id === stream.id);
-        let newStreams;
-        if (exists) {
-            newStreams = currentStreams.map(s => s.id === stream.id ? stream : s);
-        } else {
-            newStreams = [...currentStreams, stream];
-        }
-        updateStreamsHistory(newStreams);
+    const saveStreamAndNavigate = useCallback((stream: Stream) => {
+        saveStream(stream);
         setCurrentPage('dashboard');
         setEditingStreamId(null);
-    }, [history, historyIndex]);
-
-    const deleteStream = useCallback((streamId: string) => {
-        const currentStreams = history[historyIndex];
-        const newStreams = currentStreams.filter(s => s.id !== streamId);
-        updateStreamsHistory(newStreams);
-    }, [history, historyIndex]);
-
-    const canUndo = historyIndex > 0;
-    const canRedo = historyIndex < history.length - 1;
-
-    const handleUndo = useCallback(() => {
-        if (canUndo) {
-            setHistoryIndex(prevIndex => prevIndex - 1);
-        }
-    }, [canUndo]);
-
-    const handleRedo = useCallback(() => {
-        if (canRedo) {
-            setHistoryIndex(prevIndex => prevIndex + 1);
-        }
-    }, [canRedo]);
+    }, [saveStream]);
 
     const setUserLicenseStatus = (userId: string, isActive: boolean) => {
         setUsers(prevUsers => prevUsers.map(u => u.id === userId ? { ...u, licenseActive: isActive } : u));
@@ -140,12 +112,11 @@ const App: React.FC = () => {
     }, []);
 
     const handleStreamStatusChange = useCallback((streamId: string, status: StreamStatus) => {
-        const currentStreams = history[historyIndex];
-        const streamToUpdate = currentStreams.find(s => s.id === streamId);
+        const streamToUpdate = streams.find(s => s.id === streamId);
         if (!streamToUpdate || streamToUpdate.status === status) return;
 
-        const newStreams = currentStreams.map(s => s.id === streamId ? { ...s, status } : s);
-        updateStreamsHistory(newStreams);
+        const newStreams = streams.map(s => s.id === streamId ? { ...s, status } : s);
+        setStreams(newStreams);
 
         switch (status) {
             case StreamStatus.Live:
@@ -162,7 +133,7 @@ const App: React.FC = () => {
                 addNotification('error', `Gagal memulai streaming "${streamToUpdate.title}".`, streamId);
                 break;
         }
-    }, [history, historyIndex, addNotification]);
+    }, [streams, addNotification, setStreams]);
 
     // Effect for checking upcoming streams
     useEffect(() => {
@@ -217,7 +188,7 @@ const App: React.FC = () => {
                     onStatusChange={handleStreamStatusChange}
                 />;
             case 'edit-stream':
-                return <StreamEditor stream={editingStream} onSave={saveStream} onCancel={() => handleNavigation('dashboard')} />;
+                return <StreamEditor stream={editingStream} onSave={saveStreamAndNavigate} onCancel={() => handleNavigation('dashboard')} />;
             case 'analytics':
                 return <AnalyticsPage streams={streams} />;
             case 'settings':

@@ -1,3 +1,4 @@
+
 # Panduan Deployment AL ANSHOR LIVE STREAM di VPS (Metode PM2)
 
 Panduan ini dirancang untuk mendeploy antarmuka (frontend) aplikasi ini di server Anda menggunakan metode yang stabil, ringan, dan andal, sangat cocok untuk lingkungan VPS.
@@ -32,6 +33,7 @@ Metode ini menggunakan alat standar industri untuk menjalankan aplikasi berbasis
     curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
     sudo apt-get install -y nodejs
     ```
+-   **Kunci API Google Gemini**: Anda harus memiliki Kunci API yang valid dari Google AI Studio.
 
 ### Langkah 1: Siapkan File Aplikasi
 
@@ -49,28 +51,57 @@ Instal `serve` dan `pm2` secara global menggunakan `npm`.
 npm install -g serve pm2
 ```
 
-### Langkah 3: Jalankan Aplikasi dengan PM2
+### Langkah 3: Bangun dan Jalankan Aplikasi dengan PM2
 
-Sekarang, dari dalam direktori aplikasi Anda (`/home/user/alanshor-livestream`), jalankan perintah berikut untuk memulai aplikasi Anda dan menjaganya tetap berjalan:
+Aplikasi ini perlu "dibangun" untuk menyuntikkan variabel lingkungan (seperti Kunci API) ke dalam kode frontend.
 
-```bash
-pm2 start "npx serve -s . -l 3000" --name "alanshor-livestream-frontend"
-```
+1.  **Buat file Konfigurasi Lingkungan**:
+    Buat file baru bernama `build-env.js` di direktori root proyek:
+    ```bash
+    nano build-env.js
+    ```
+    Tempel konten berikut ke dalamnya. **Ganti `your_gemini_api_key_here` dengan kunci API Anda yang sebenarnya.**
+    ```javascript
+    const fs = require('fs');
 
-Penjelasan Perintah:
--   `pm2 start "..."`: Memulai proses yang didefinisikan dalam tanda kutip.
--   `npx serve`: Menjalankan server `serve`.
--   `-s`: Mode *single-page application*. Ini sangat penting; ini memastikan bahwa semua permintaan akan diarahkan ke `index.html`, yang memungkinkan routing di sisi klien React berfungsi dengan benar.
--   `.`: Menyajikan file dari direktori saat ini.
--   `-l 3000`: Menjalankan server di port 3000.
--   `--name "..."`: Memberi nama proses di `pm2` agar mudah diidentifikasi.
+    const envContent = `window.process = { env: { API_KEY: '${process.env.API_KEY}' } };`;
+    
+    // Ini akan menimpa index.html dengan versi yang menyertakan kunci API.
+    // Pastikan Anda memiliki cadangan jika diperlukan.
+    let indexHtml = fs.readFileSync('./index.html', 'utf-8');
+    
+    const injectionScript = `<script>${envContent}</script>`;
+    
+    // Cari tag </head> dan sisipkan skrip sebelum itu
+    indexHtml = indexHtml.replace('</head>', `    ${injectionScript}\n</head>`);
 
-Untuk memastikan aplikasi Anda akan otomatis berjalan lagi setelah VPS di-reboot, jalankan:
-```bash
-pm2 startup
-# Salin dan jalankan perintah yang diberikan oleh pm2
-pm2 save
-```
+    fs.writeFileSync('./index.html.build', indexHtml);
+
+    console.log('Build finished: index.html.build created with API Key.');
+    ```
+
+2.  **Jalankan Build dan Mulai Server dengan PM2**:
+    Dari dalam direktori aplikasi Anda, jalankan perintah berikut:
+    ```bash
+    # Setel Kunci API Anda di sini
+    export API_KEY="your_gemini_api_key_here"
+    
+    # Jalankan skrip build
+    node build-env.js
+    
+    # Mulai server menggunakan file yang sudah dibangun dengan pm2
+    pm2 start "npx serve -s index.html.build -l 3000" --name "alanshor-livestream-frontend"
+    ```
+
+    **Penting:** Aplikasi ini sekarang dirancang untuk membaca `API_KEY` dari `window.process.env`. Menjalankannya tanpa langkah build ini akan menonaktifkan semua fitur AI.
+
+3.  **Aktifkan Startup Otomatis**:
+    Untuk memastikan aplikasi Anda akan otomatis berjalan lagi setelah VPS di-reboot, jalankan:
+    ```bash
+    pm2 startup
+    # Salin dan jalankan perintah yang diberikan oleh pm2
+    pm2 save
+    ```
 
 ### Langkah 4: Konfigurasi Nginx sebagai Reverse Proxy (Akses Publik)
 
@@ -94,7 +125,12 @@ Langkah ini penting agar Anda dapat mengakses aplikasi melalui IP publik VPS And
         listen 80;
         server_name ALAMAT_IP_VPS_ANDA; # Ganti dengan IP atau domain Anda
 
+        # Arahkan ke file build yang benar
+        root /home/user/alanshor-livestream; # Ganti dengan path direktori Anda
+        index index.html.build;
+
         location / {
+            try_files $uri /index.html.build;
             # Teruskan lalu lintas ke aplikasi yang berjalan di port 3000
             proxy_pass http://127.0.0.1:3000;
             proxy_set_header Host $host;
@@ -115,11 +151,11 @@ Langkah ini penting agar Anda dapat mengakses aplikasi melalui IP publik VPS And
 
 ## Selesai!
 
-Sekarang buka browser dan navigasikan ke `http://ALAMAT_IP_VPS_ANDA`. Anda akan melihat antarmuka AL ANSHOR LIVE STREAM, yang disajikan oleh Nginx dari aplikasi yang berjalan stabil di bawah `pm2`.
+Sekarang buka browser dan navigasikan ke `http://ALAMAT_IP_VPS_ANDA`. Anda akan melihat antarmuka AL ANSHOR LIVE STREAM.
 
 ### Perintah PM2 yang Berguna
 
 -   **Melihat status semua aplikasi**: `pm2 list`
 -   **Melihat log aplikasi**: `pm2 logs alanshor-livestream-frontend`
--   **Me-restart aplikasi**: `pm2 restart alanshor-livestream-frontend`
+-   **Me-restart aplikasi (setelah mengubah kode)**: `pm2 restart alanshor-livestream-frontend`
 -   **Menghentikan aplikasi**: `pm2 stop alanshor-livestream-frontend`

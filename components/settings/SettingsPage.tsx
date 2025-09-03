@@ -3,10 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Card from '../ui/Card';
 import Toggle from '../ui/Toggle';
 import Button from '../ui/Button';
-import Input from '../ui/Input';
-import Spinner from '../ui/Spinner';
-import { CheckCircleIcon, WarningIcon, YouTubeIcon, FacebookIcon, TwitchIcon, TikTokIcon, InstagramIcon, CustomStreamIcon, LinkIcon, UnlinkIcon } from '../icons/Icons';
-import { validateApiKey } from '../../services/geminiService';
+import { InfoIcon, YouTubeIcon, FacebookIcon, TwitchIcon, TikTokIcon, InstagramIcon, CustomStreamIcon, LinkIcon, UnlinkIcon } from '../icons/Icons';
 import { ConnectedAccount, Platform, mockBrowsableAccounts, SimulatedPlatformAccount } from '../../types';
 import OAuthSimModal from './OAuthSimModal';
 
@@ -21,30 +18,12 @@ const platformIcons: Record<Platform, React.ReactNode> = {
 
 const SettingsPage: React.FC = () => {
     const [previewMode, setPreviewMode] = useState(true);
-
-    const [apiKeyInput, setApiKeyInput] = useState('');
-    const [apiKeyStatus, setApiKeyStatus] = useState<'loading' | 'valid' | 'invalid' | 'none'>('loading');
-    const [isSaving, setIsSaving] = useState(false);
-    
     const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [platformToConnect, setPlatformToConnect] = useState<Platform | null>(null);
 
     // Efek untuk memuat data dari localStorage saat komponen pertama kali dirender
     useEffect(() => {
-        // Logika untuk kunci API Gemini
-        const checkSavedKey = async () => {
-            const savedKey = localStorage.getItem('gemini_api_key');
-            if (savedKey) {
-                setApiKeyInput(savedKey);
-                const isValid = await validateApiKey(savedKey);
-                setApiKeyStatus(isValid ? 'valid' : 'invalid');
-            } else {
-                setApiKeyStatus('none');
-            }
-        };
-        checkSavedKey();
-
         // Logika untuk akun terhubung
         try {
             const savedAccountsRaw = localStorage.getItem('connected_accounts');
@@ -64,19 +43,6 @@ const SettingsPage: React.FC = () => {
             console.error("Tidak dapat memuat atau membuat akun yang terhubung dari localStorage", e);
         }
     }, []);
-
-    const handleSaveApiKey = async () => {
-        setIsSaving(true);
-        const isValid = await validateApiKey(apiKeyInput);
-        if (isValid) {
-            localStorage.setItem('gemini_api_key', apiKeyInput);
-            setApiKeyStatus('valid');
-        } else {
-            localStorage.removeItem('gemini_api_key');
-            setApiKeyStatus('invalid');
-        }
-        setIsSaving(false);
-    };
     
     const handleOpenConnectModal = (platform: Platform) => {
         setPlatformToConnect(platform);
@@ -102,22 +68,6 @@ const SettingsPage: React.FC = () => {
         setConnectedAccounts(newAccounts);
         localStorage.setItem('connected_accounts', JSON.stringify(newAccounts));
     };
-
-
-    const getStatusMessage = () => {
-        switch (apiKeyStatus) {
-            case 'loading':
-                return <p className="text-sm text-yellow-400 mt-2">Memvalidasi kunci yang tersimpan...</p>;
-            case 'valid':
-                return <p className="text-sm text-green-400 mt-2 flex items-center"><CheckCircleIcon className="h-4 w-4 mr-1"/>Kunci API valid dan tersimpan.</p>;
-            case 'invalid':
-                return <p className="text-sm text-red-400 mt-2 flex items-center"><WarningIcon className="h-4 w-4 mr-1"/>Kunci API tidak valid atau telah kedaluwarsa.</p>;
-            case 'none':
-                return <p className="text-sm text-text-secondary mt-2">Tidak ada kunci API tersimpan. Fitur AI tidak aktif.</p>;
-            default:
-                return null;
-        }
-    };
     
     const getAvailableAccountsForPlatform = (platform: Platform): SimulatedPlatformAccount[] => {
         const connectedIds = new Set(connectedAccounts.map(acc => acc.id));
@@ -132,25 +82,15 @@ const SettingsPage: React.FC = () => {
             <div className="space-y-8 max-w-3xl">
                 <Card>
                     <h2 className="text-xl font-semibold mb-4 border-b border-secondary pb-2">Konfigurasi AI Gemini</h2>
-                    <p className="text-sm text-text-secondary mb-4">
-                        Masukkan kunci API Google Gemini Anda untuk mengaktifkan fitur pembuatan konten otomatis. Anda dapat memperoleh kunci dari Google AI Studio.
-                    </p>
-                    <div className="flex items-start space-x-2">
-                        <Input 
-                            label="Kunci API Gemini" 
-                            type="password" 
-                            value={apiKeyInput}
-                            onChange={(e) => setApiKeyInput(e.target.value)}
-                            className="flex-grow"
-                            placeholder="Masukkan kunci API Anda"
-                        />
-                        <div className="pt-7">
-                            <Button onClick={handleSaveApiKey} disabled={isSaving}>
-                                {isSaving ? <Spinner /> : 'Simpan & Validasi'}
-                            </Button>
+                    <div className="flex items-start p-4 bg-background rounded-lg border border-secondary">
+                        <InfoIcon className="h-6 w-6 text-blue-400 mr-4 mt-1 flex-shrink-0" />
+                        <div>
+                             <h3 className="font-semibold text-text-primary">Fitur AI Dikelola oleh Administrator</h3>
+                             <p className="text-sm text-text-secondary mt-1">
+                                Kunci API Google Gemini untuk fitur pembuatan konten otomatis dikonfigurasi di tingkat sistem oleh administrator. Jika fitur AI tidak berfungsi, silakan hubungi mereka.
+                            </p>
                         </div>
                     </div>
-                    {getStatusMessage()}
                 </Card>
 
                 <Card>
